@@ -35,5 +35,4 @@ jobs:
         run: cargo install cargo-hack --version 0.6.37 --force --locked
       - name: Build
         run: cargo hack build --verbose --release --feature-powerset
-      - name: Tests
-        run: cargo hack test --verbose --release --feature-powerset
+

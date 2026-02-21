@@ -28,9 +28,30 @@ assert_eq!(mem::size_of::<(ColdString, u8)>(), 9);
 assert_eq!(mem::align_of::<(ColdString, u8)>(), 1);
 ```
 
+# How It Works
+
+ColdString is an 8 bytes pointer/array (4 bytes if 32-bit machine):
+```rust,ignore
+pub struct ColdString([u8; 8]);
+```
+The array acts as either a pointer to heap data for strings longer than 7 bytes or is the inlined data itself.
+
+## Inline Mode
+`self.0[0]` to `self.0[6]` store the bytes of string. In the least significant byte, `self.0[7]`, the least significant bit signifies the inline/heap flag, and is set to "1" for inline mode. The next bits encode the length (always between 0 and 7).
+```ignore
+b0 b1 b2 b3 b4 b5 b6 b7
+b7 = <7 bit len> | 1
+```
+
+## Heap Mode
+The bytes act as a pointer to heap. The data on the heap has alignment 2, causing the least significant bit to always be 0 (since alignment 2 implies `addr % 2 == 0`), signifying heap mode. On the heap, the data starts with a variable length integer encoding of the length, followed by the bytes.
+```ignore
+ptr --> <var int length> <data>
+```
+
 # Memory Comparisons
 
-TODO
+<img width="1920" height="967" alt="string_memory" src="https://github.com/user-attachments/assets/25f5acf8-9a3e-4a4c-b2f1-b2fb972cc9c8" />
 
 ## Measured from System Memory
 

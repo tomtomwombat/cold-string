@@ -27,13 +27,6 @@ const WIDTH: usize = mem::size_of::<usize>();
 pub struct ColdString([u8; WIDTH]);
 
 impl ColdString {
-    const LSB_INDEX: usize = if cfg!(target_endian = "little") {
-        0
-    } else {
-        WIDTH - 1
-    };
-    const DATA_START: usize = if cfg!(target_endian = "little") { 1 } else { 0 };
-
     pub fn new(s: &str) -> Self {
         if s.len() < WIDTH {
             Self::new_inline(s)
@@ -44,7 +37,7 @@ impl ColdString {
 
     #[inline]
     fn is_inline(&self) -> bool {
-        self.0[Self::LSB_INDEX] & 1 == 1
+        self.0[0] & 1 == 1
     }
 
     #[inline]
@@ -52,10 +45,10 @@ impl ColdString {
         debug_assert!(s.len() < WIDTH);
         let mut buf = [0u8; WIDTH];
         unsafe {
-            let dest_ptr = buf.as_mut_ptr().add(Self::DATA_START);
+            let dest_ptr = buf.as_mut_ptr().add(1);
             ptr::copy_nonoverlapping(s.as_ptr(), dest_ptr, s.len());
         }
-        buf[Self::LSB_INDEX] = ((s.len() as u8) << 1) | 1;
+        buf[0] = ((s.len() as u8) << 1) | 1;
         Self(buf)
     }
 
@@ -79,21 +72,21 @@ impl ColdString {
 
             let addr = ptr.expose_provenance();
             debug_assert!(addr % 2 == 0);
-            Self(addr.to_ne_bytes())
+            Self(addr.to_le_bytes())
         }
     }
 
     #[inline]
     fn heap_ptr(&self) -> *mut u8 {
         debug_assert!(!self.is_inline());
-        let addr = usize::from_ne_bytes(self.0);
+        let addr = usize::from_le_bytes(self.0);
         debug_assert!(addr % 2 == 0);
         with_exposed_provenance_mut::<u8>(addr)
     }
 
     #[inline]
     fn inline_len(&self) -> usize {
-        self.0[Self::LSB_INDEX] as usize >> 1
+        self.0[0] as usize >> 1
     }
 
     #[inline]
@@ -113,7 +106,7 @@ impl ColdString {
     #[inline]
     unsafe fn decode_inline(&self) -> &[u8] {
         let len = self.inline_len();
-        let ptr = self.0.as_ptr().add(Self::DATA_START);
+        let ptr = self.0.as_ptr().add(1);
         slice::from_raw_parts(ptr, len)
     }
 

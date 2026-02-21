@@ -34,7 +34,7 @@ ColdString is an 8 byte array (4 bytes on 32-bit machines):
 ```rust,ignore
 pub struct ColdString([u8; 8]);
 ```
-The array acts as either a pointer to heap data for strings longer than 7 bytes or is the inlined data itself. Below assumes 64-bit, little endian machine.
+The array acts as either a pointer to heap data for strings longer than 7 bytes or is the inlined data itself.
 ## Inline Mode
 `self.0[1]` to `self.0[7]` store the bytes of string. In the least significant byte, `self.0[0]`, the least significant bit signifies the inline/heap flag, and is set to "1" for inline mode. The next bits encode the length (always between 0 and 7).
 ```ignore

@@ -23,6 +23,10 @@ proptest! {
         let cold1 = ColdString::new(left.as_str());
         let cold2 = ColdString::new(right.as_str());
         assert_eq!(cold1 == cold2, left == right);
+        assert_eq!(cold1 == right.as_str(), left == right);
+        assert_eq!(right.as_str() == cold1, left == right);
+        assert_eq!(cold2 == left.as_str(), left == right);
+        assert_eq!(left.as_str() == cold2, left == right);
     }
 
     #[test]

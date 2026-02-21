@@ -6,8 +6,6 @@
 
 Compact representation of immutable UTF-8 strings. Optimized for memory usage and struct packing.
 
-Compact string optimized for memory usage and struct packing. Strings can be any length and UTF-8, but are immutable.
-
 # Usage
 
 Use it like a `String`:

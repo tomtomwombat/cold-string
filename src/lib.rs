@@ -92,9 +92,14 @@ impl ColdString {
     }
 
     #[inline]
+    fn inline_len(&self) -> usize {
+        self.0[Self::LSB_INDEX] as usize >> 1
+    }
+
+    #[inline]
     pub fn len(&self) -> usize {
         if self.is_inline() {
-            self.0[Self::LSB_INDEX] as usize >> 1
+            self.inline_len()
         } else {
             unsafe {
                 let ptr = self.heap_ptr();
@@ -102,6 +107,14 @@ impl ColdString {
                 len as usize
             }
         }
+    }
+
+    #[allow(unsafe_op_in_unsafe_fn)]
+    #[inline]
+    unsafe fn decode_inline(&self) -> &[u8] {
+        let len = self.inline_len();
+        let ptr = self.0.as_ptr().add(Self::DATA_START);
+        slice::from_raw_parts(ptr, len)
     }
 
     #[allow(unsafe_op_in_unsafe_fn)]
@@ -114,17 +127,16 @@ impl ColdString {
     }
 
     #[inline]
-    pub fn as_str(&self) -> &str {
-        if self.is_inline() {
-            let len = self.len();
-            unsafe {
-                let ptr = self.0.as_ptr().add(Self::DATA_START);
-                let slice = slice::from_raw_parts(ptr, len);
-                str::from_utf8_unchecked(slice)
-            }
-        } else {
-            unsafe { str::from_utf8_unchecked(self.decode_heap()) }
+    pub fn as_bytes(&self) -> &[u8] {
+        match self.is_inline() {
+            true => unsafe { self.decode_inline() },
+            false => unsafe { self.decode_heap() },
         }
+    }
+
+    #[inline]
+    pub fn as_str(&self) -> &str {
+        unsafe { str::from_utf8_unchecked(self.as_bytes()) }
     }
 }
 
@@ -210,10 +222,44 @@ impl FromIterator<char> for ColdString {
 unsafe impl Send for ColdString {}
 unsafe impl Sync for ColdString {}
 
+impl core::borrow::Borrow<str> for ColdString {
+    fn borrow(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl PartialEq<str> for ColdString {
+    fn eq(&self, other: &str) -> bool {
+        if self.is_inline() {
+            unsafe { self.decode_inline() == other.as_bytes() }
+        } else {
+            unsafe { self.decode_heap() == other.as_bytes() }
+        }
+    }
+}
+
+impl PartialEq<ColdString> for str {
+    fn eq(&self, other: &ColdString) -> bool {
+        other.eq(self)
+    }
+}
+
+impl PartialEq<&str> for ColdString {
+    fn eq(&self, other: &&str) -> bool {
+        self.eq(*other)
+    }
+}
+
+impl PartialEq<ColdString> for &str {
+    fn eq(&self, other: &ColdString) -> bool {
+        other.eq(*self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::hash::BuildHasher;
+    use core::hash::BuildHasher;
 
     #[test]
     fn test_layout() {
@@ -236,8 +282,12 @@ mod tests {
             assert_eq!(cs.len(), s.len());
             assert_eq!(cs.len() < 8, cs.is_inline());
             assert_eq!(cs.clone(), cs);
-            let bh = std::hash::RandomState::new();
+            let bh = core::hash::RandomState::new();
             assert_eq!(bh.hash_one(&cs), bh.hash_one(&cs.clone()));
+            assert_eq!(cs, s);
+            assert_eq!(s, cs);
+            assert_eq!(cs, *s);
+            assert_eq!(*s, cs);
         }
     }
 }

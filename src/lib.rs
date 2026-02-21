@@ -295,9 +295,10 @@ mod tests {
             assert_eq!(cs.len(), s.len());
             assert_eq!(cs.len() < 8, cs.is_inline());
             assert_eq!(cs.clone(), cs);
-            if cfg!(feature = "std") {
-                use core::hash::BuildHasher;
-                let bh = std::hash::RandomState::new();
+            #[cfg(feature = "std")]
+            {
+                use std::hash::{BuildHasher, RandomState};
+                let bh = RandomState::new();
                 assert_eq!(bh.hash_one(&cs), bh.hash_one(&cs.clone()));
             }
             assert_eq!(cs, s);

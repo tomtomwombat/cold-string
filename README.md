@@ -4,7 +4,7 @@
 [![docs.rs](https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs)](https://docs.rs/cold-string)
 ![Downloads](https://img.shields.io/crates/d/cold-string?style=for-the-badge)
 
-Compact string optimized for memory usage and struct packing.
+Compact string optimized for memory usage and struct packing. Strings can be any length and UTF-8, but are immutable.
 
 # Usage
 
@@ -30,7 +30,7 @@ assert_eq!(mem::align_of::<(ColdString, u8)>(), 1);
 
 # How It Works
 
-ColdString is an 8 bytes pointer/array (4 bytes if 32-bit machine):
+ColdString is an 8 byte array (4 bytes on 32-bit machines):
 ```rust,ignore
 pub struct ColdString([u8; 8]);
 ```
@@ -42,6 +42,7 @@ The array acts as either a pointer to heap data for strings longer than 7 bytes 
 b0 b1 b2 b3 b4 b5 b6 b7
 b7 = <7 bit len> | 1
 ```
+For example, `"qwerty" = ['q', 'w', 'e', 'r', 't', 'y', 0, 13]`, where 13 is `"qwerty".len() << 1 | 1`.
 
 ## Heap Mode
 The bytes act as a pointer to heap. The data on the heap has alignment 2, causing the least significant bit to always be 0 (since alignment 2 implies `addr % 2 == 0`), signifying heap mode. On the heap, the data starts with a variable length integer encoding of the length, followed by the bytes.

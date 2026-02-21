@@ -256,10 +256,23 @@ impl PartialEq<ColdString> for &str {
     }
 }
 
+impl AsRef<str> for ColdString {
+    #[inline]
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl AsRef<[u8]> for ColdString {
+    #[inline]
+    fn as_ref(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core::hash::BuildHasher;
 
     #[test]
     fn test_layout() {
@@ -282,8 +295,11 @@ mod tests {
             assert_eq!(cs.len(), s.len());
             assert_eq!(cs.len() < 8, cs.is_inline());
             assert_eq!(cs.clone(), cs);
-            let bh = core::hash::RandomState::new();
-            assert_eq!(bh.hash_one(&cs), bh.hash_one(&cs.clone()));
+            if cfg!(feature = "std") {
+                use core::hash::BuildHasher;
+                let bh = std::hash::RandomState::new();
+                assert_eq!(bh.hash_one(&cs), bh.hash_one(&cs.clone()));
+            }
             assert_eq!(cs, s);
             assert_eq!(s, cs);
             assert_eq!(cs, *s);

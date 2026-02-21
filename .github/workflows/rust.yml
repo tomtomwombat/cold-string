@@ -22,7 +22,16 @@ jobs:
       run: cargo hack build --verbose --release --feature-powerset
     - name: Tests
       run: cargo hack test --verbose --release --feature-powerset
-
+    - name: Install nightly + Miri
+      run: |
+          rustup toolchain install nightly
+          rustup component add miri --toolchain nightly
+    - name: Run Miri
+      run: |
+          cargo +nightly miri test --test property
+    - name: Run Miri Unknown
+      run: |
+          cargo +nightly miri test --test property --target mips-unknown-linux-gnu
   msrv:
     runs-on: ubuntu-latest
     steps:

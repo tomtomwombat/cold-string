@@ -30,6 +30,8 @@ proptest! {
         let cold = ColdString::new(s.as_str());
         assert_eq!(cold.len(), s.len());
         assert_eq!(cold.as_str(), s.as_str());
+        assert_eq!(cold, ColdString::from(s.as_str()));
+        assert_eq!(cold, cold.clone());
     }
 
 }

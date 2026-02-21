@@ -56,15 +56,33 @@ fn bench_as_str(c: &mut Criterion) {
 }
 
 fn bench_hash(c: &mut Criterion) {
-    let cold = ColdString::from(LONG);
-    let string = String::from(LONG);
+    let cold_long = ColdString::from(LONG);
+    let cold_short = ColdString::from(SHORT);
+    let string_long = String::from(LONG);
+    let string_short = String::from(SHORT);
 
     let mut group = c.benchmark_group("hash");
 
-    group.bench_function("ColdString hash", |b| {
+    group.bench_function("ColdString hash short", |b| {
         b.iter(|| {
             let mut hasher = DefaultHasher::new();
-            cold.hash(&mut hasher);
+            cold_short.hash(&mut hasher);
+            black_box(hasher.finish());
+        })
+    });
+
+    group.bench_function("ColdString hash long", |b| {
+        b.iter(|| {
+            let mut hasher = DefaultHasher::new();
+            cold_long.hash(&mut hasher);
+            black_box(hasher.finish());
+        })
+    });
+
+    group.bench_function("String hash short", |b| {
+        b.iter(|| {
+            let mut hasher = DefaultHasher::new();
+            string_short.hash(&mut hasher);
             black_box(hasher.finish());
         })
     });
@@ -72,7 +90,7 @@ fn bench_hash(c: &mut Criterion) {
     group.bench_function("String hash", |b| {
         b.iter(|| {
             let mut hasher = DefaultHasher::new();
-            string.hash(&mut hasher);
+            string_long.hash(&mut hasher);
             black_box(hasher.finish());
         })
     });

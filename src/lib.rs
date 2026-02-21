@@ -27,6 +27,13 @@ const WIDTH: usize = mem::size_of::<usize>();
 pub struct ColdString([u8; WIDTH]);
 
 impl ColdString {
+    const LSB_INDEX: usize = if cfg!(target_endian = "little") {
+        0
+    } else {
+        WIDTH - 1
+    };
+    const DATA_START: usize = if cfg!(target_endian = "little") { 1 } else { 0 };
+
     pub fn new(s: &str) -> Self {
         if s.len() < WIDTH {
             Self::new_inline(s)
@@ -37,15 +44,18 @@ impl ColdString {
 
     #[inline]
     fn is_inline(&self) -> bool {
-        self.0[WIDTH - 1] & 1 == 1
+        self.0[Self::LSB_INDEX] & 1 == 1
     }
 
     #[inline]
     fn new_inline(s: &str) -> Self {
         debug_assert!(s.len() < WIDTH);
         let mut buf = [0u8; WIDTH];
-        buf[..s.len()].copy_from_slice(s.as_bytes());
-        buf[WIDTH - 1] = ((s.len() as u8) << 1) | 1;
+        unsafe {
+            let dest_ptr = buf.as_mut_ptr().add(Self::DATA_START);
+            ptr::copy_nonoverlapping(s.as_ptr(), dest_ptr, s.len());
+        }
+        buf[Self::LSB_INDEX] = ((s.len() as u8) << 1) | 1;
         Self(buf)
     }
 
@@ -67,20 +77,24 @@ impl ColdString {
             ptr::copy_nonoverlapping(len_buf.as_ptr(), ptr, vint_len);
             ptr::copy_nonoverlapping(s.as_ptr(), ptr.add(vint_len), len);
 
-            Self(ptr.addr().to_le_bytes())
+            let addr = ptr.expose_provenance();
+            debug_assert!(addr % 2 == 0);
+            Self(addr.to_ne_bytes())
         }
     }
 
     #[inline]
     fn heap_ptr(&self) -> *mut u8 {
         debug_assert!(!self.is_inline());
-        with_exposed_provenance_mut::<u8>(usize::from_le_bytes(self.0))
+        let addr = usize::from_ne_bytes(self.0);
+        debug_assert!(addr % 2 == 0);
+        with_exposed_provenance_mut::<u8>(addr)
     }
 
     #[inline]
     pub fn len(&self) -> usize {
         if self.is_inline() {
-            self.0[WIDTH - 1] as usize >> 1
+            self.0[Self::LSB_INDEX] as usize >> 1
         } else {
             unsafe {
                 let ptr = self.heap_ptr();
@@ -104,7 +118,7 @@ impl ColdString {
         if self.is_inline() {
             let len = self.len();
             unsafe {
-                let ptr = self.0.as_ptr();
+                let ptr = self.0.as_ptr().add(Self::DATA_START);
                 let slice = slice::from_raw_parts(ptr, len);
                 str::from_utf8_unchecked(slice)
             }
@@ -137,7 +151,10 @@ impl Drop for ColdString {
 
 impl Clone for ColdString {
     fn clone(&self) -> Self {
-        ColdString::new(self.as_str())
+        match self.is_inline() {
+            true => Self(self.0),
+            false => Self::new_heap(self.as_str()),
+        }
     }
 }
 
@@ -190,9 +207,13 @@ impl FromIterator<char> for ColdString {
     }
 }
 
+unsafe impl Send for ColdString {}
+unsafe impl Sync for ColdString {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::hash::BuildHasher;
 
     #[test]
     fn test_layout() {
@@ -214,6 +235,9 @@ mod tests {
             assert_eq!(cs.as_str(), s);
             assert_eq!(cs.len(), s.len());
             assert_eq!(cs.len() < 8, cs.is_inline());
+            assert_eq!(cs.clone(), cs);
+            let bh = std::hash::RandomState::new();
+            assert_eq!(bh.hash_one(&cs), bh.hash_one(&cs.clone()));
         }
     }
 }

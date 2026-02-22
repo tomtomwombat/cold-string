@@ -1,7 +1,7 @@
 pub struct VarInt;
 
 impl VarInt {
-    pub fn write(mut value: u64, buf: &mut [u8; 10]) -> usize {
+    pub const fn write(mut value: u64, buf: &mut [u8; 10]) -> usize {
         let mut i = 0;
         loop {
             let mut byte = (value & 0x7F) as u8;
@@ -19,7 +19,7 @@ impl VarInt {
     }
 
     #[allow(unsafe_op_in_unsafe_fn)]
-    pub unsafe fn read(ptr: *const u8) -> (u64, usize) {
+    pub const unsafe fn read(ptr: *const u8) -> (u64, usize) {
         let mut result = 0u64;
         let mut shift = 0;
         let mut i = 0;

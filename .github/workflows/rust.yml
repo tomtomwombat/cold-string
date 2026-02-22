@@ -41,7 +41,7 @@ jobs:
           toolchain: "1.84"
           override: true
       - name: Install cargo-hack
-        run: cargo install cargo-hack --version 0.6.37 --force --locked
+        run: cargo +1.84 install cargo-hack --version 0.6.37 --force --locked
       - name: Build
-        run: cargo hack build --verbose --release --feature-powerset
+        run: cargo +1.84 hack build --verbose --release --feature-powerset
 

@@ -37,7 +37,7 @@ pub struct ColdString([u8; 8]);
 The array acts as either a pointer to heap data for strings longer than 7 bytes or is the inlined data itself.
 ## Inline Mode
 `self.0[1]` to `self.0[7]` store the bytes of string. In the least significant byte, `self.0[0]`, the least significant bit signifies the inline/heap flag, and is set to "1" for inline mode. The next bits encode the length (always between 0 and 7).
-```ignore
+```text,ignore
 b0 b1 b2 b3 b4 b5 b6 b7
 b0 = <7 bit len> | 1
 ```
@@ -45,18 +45,18 @@ For example, `"qwerty" = [13, 'q', 'w', 'e', 'r', 't', 'y', 0]`, where 13 is `"q
 
 ## Heap Mode
 The bytes act as a pointer to heap. The data on the heap has alignment 2, causing the least significant bit to always be 0 (since alignment 2 implies `addr % 2 == 0`), signifying heap mode. On the heap, the data starts with a variable length integer encoding of the length, followed by the bytes.
-```ignore
+```text,ignore
 ptr --> <var int length> <data>
 ```
 
 # Memory Comparisons
 
-<img width="1920" height="967" alt="string_memory" src="https://github.com/user-attachments/assets/25f5acf8-9a3e-4a4c-b2f1-b2fb972cc9c8" />
+![string_memory](https://github.com/user-attachments/assets/25f5acf8-9a3e-4a4c-b2f1-b2fb972cc9c8)
 
 ## Measured from System Memory
 
 ### 0..=4
-```ignore
+```text,ignore
 Crate, len 0..=4   |      RSS (B) |  Virtual (B)
 -------------------|--------------|-------------
 std                |         36.9 |         38.4
@@ -67,7 +67,7 @@ cold-string        |          8.0 |          8.0
 ```
 
 ### 0..=8
-```ignore
+```text,ignore
 Crate, len 0..=8   |      RSS (B) |  Virtual (B)
 -------------------|--------------|-------------
 std                |         38.4 |         40.0
@@ -78,7 +78,7 @@ cold-string        |         11.2 |         11.7
 ```
 
 ### 0..=16
-```ignore
+```text,ignore
 Crate, len 0..=16  |      RSS (B) |  Virtual (B)
 -------------------|--------------|-------------
 std                |         46.8 |         48.6
@@ -89,7 +89,7 @@ cold-string        |         24.9 |         26.7
 ```
 
 ### 0..=32
-```ignore
+```text,ignore
 Crate, len 0..=32  |      RSS (B) |  Virtual (B)
 -------------------|--------------|-------------
 std                |         55.3 |         57.4
@@ -100,7 +100,7 @@ cold-string        |         36.5 |         38.8
 ```
 
 ### 0..=64
-```ignore
+```text,ignore
 Crate, len 0..=64  |      RSS (B) |  Virtual (B)
 -------------------|--------------|-------------
 std                |         71.4 |         73.7

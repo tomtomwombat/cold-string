@@ -6,6 +6,7 @@ extern crate alloc;
 
 use alloc::{
     alloc::{alloc, dealloc, Layout},
+    str::Utf8Error,
     string::String,
 };
 use core::{
@@ -23,11 +24,82 @@ use crate::vint::VarInt;
 const HEAP_ALIGN: usize = 2;
 const WIDTH: usize = mem::size_of::<usize>();
 
+/// Compact representation of immutable UTF-8 strings. Optimized for memory usage and struct packing.
+///
+/// # Example
+/// ```
+/// let s = cold_string::ColdString::new("qwerty");
+/// assert_eq!(s.as_str(), "qwerty");
+/// ```
+/// ```
+/// use std::mem;
+/// use cold_string::ColdString;
+///
+/// assert_eq!(mem::size_of::<ColdString>(), 8);
+/// assert_eq!(mem::align_of::<ColdString>(), 1);
+/// assert_eq!(mem::size_of::<(ColdString, u8)>(), 9);
+/// assert_eq!(mem::align_of::<(ColdString, u8)>(), 1);
+/// ```
 #[repr(transparent)]
 pub struct ColdString([u8; WIDTH]);
 
 impl ColdString {
-    pub fn new(s: &str) -> Self {
+    /// Convert a slice of bytes into a [`ColdString`].
+    ///
+    /// A [`ColdString`] is a contiguous collection of bytes (`u8`s) that is valid [`UTF-8`](https://en.wikipedia.org/wiki/UTF-8).
+    /// This method converts from an arbitrary contiguous collection of bytes into a
+    /// [`ColdString`], failing if the provided bytes are not `UTF-8`.
+    ///
+    /// # Examples
+    /// ### Valid UTF-8
+    /// ```
+    /// # use cold_string::ColdString;
+    /// let bytes = [240, 159, 166, 128, 240, 159, 146, 175];
+    /// let compact = ColdString::from_utf8(&bytes).expect("valid UTF-8");
+    ///
+    /// assert_eq!(compact, "🦀💯");
+    /// ```
+    ///
+    /// ### Invalid UTF-8
+    /// ```
+    /// # use cold_string::ColdString;
+    /// let bytes = [255, 255, 255];
+    /// let result = ColdString::from_utf8(&bytes);
+    ///
+    /// assert!(result.is_err());
+    /// ```
+    pub fn from_utf8(v: &[u8]) -> Result<Self, Utf8Error> {
+        Ok(Self::new(str::from_utf8(v)?))
+    }
+
+    /// Converts a vector of bytes to a [`ColdString`] without checking that the string contains
+    /// valid UTF-8.
+    ///
+    /// See the safe version, [`ColdString::from_utf8`], for more details.
+    ///
+    /// # Examples
+    ///
+    /// Basic usage:
+    ///
+    /// ```
+    /// # use cold_string::ColdString;
+    /// // some bytes, in a vector
+    /// let sparkle_heart = [240, 159, 146, 150];
+    ///
+    /// let sparkle_heart = unsafe {
+    ///     ColdString::from_utf8_unchecked(&sparkle_heart)
+    /// };
+    ///
+    /// assert_eq!("💖", sparkle_heart);
+    /// ```
+    pub unsafe fn from_utf8_unchecked(v: &[u8]) -> Self {
+        Self::new(str::from_utf8_unchecked(v))
+    }
+
+    /// Creates a new [`ColdString`] from any type that implements `AsRef<str>`.
+    /// If the string is short enough, then it will be inlined on the stack.
+    pub fn new<T: AsRef<str>>(x: T) -> Self {
+        let s = x.as_ref();
         if s.len() < WIDTH {
             Self::new_inline(s)
         } else {
@@ -36,12 +108,12 @@ impl ColdString {
     }
 
     #[inline]
-    fn is_inline(&self) -> bool {
+    const fn is_inline(&self) -> bool {
         self.0[0] & 1 == 1
     }
 
     #[inline]
-    fn new_inline(s: &str) -> Self {
+    const fn new_inline(s: &str) -> Self {
         debug_assert!(s.len() < WIDTH);
         let mut buf = [0u8; WIDTH];
         unsafe {
@@ -78,6 +150,7 @@ impl ColdString {
 
     #[inline]
     fn heap_ptr(&self) -> *mut u8 {
+        // Can be const in 1.91
         debug_assert!(!self.is_inline());
         let addr = usize::from_le_bytes(self.0);
         debug_assert!(addr % 2 == 0);
@@ -85,10 +158,26 @@ impl ColdString {
     }
 
     #[inline]
-    fn inline_len(&self) -> usize {
+    const fn inline_len(&self) -> usize {
         self.0[0] as usize >> 1
     }
 
+    /// Returns the length of this `ColdString`, in bytes, not [`char`]s or
+    /// graphemes. In other words, it might not be what a human considers the
+    /// length of the string.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use cold_string::ColdString;
+    ///
+    /// let a = ColdString::from("foo");
+    /// assert_eq!(a.len(), 3);
+    ///
+    /// let fancy_f = String::from("ƒoo");
+    /// assert_eq!(fancy_f.len(), 4);
+    /// assert_eq!(fancy_f.chars().count(), 3);
+    /// ```
     #[inline]
     pub fn len(&self) -> usize {
         if self.is_inline() {
@@ -119,6 +208,19 @@ impl ColdString {
         slice::from_raw_parts(data, len as usize)
     }
 
+    /// Returns a byte slice of this `ColdString`'s contents.
+    ///
+    /// The inverse of this method is [`from_utf8`].
+    ///
+    /// [`from_utf8`]: String::from_utf8
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let s = cold_string::ColdString::from("hello");
+    ///
+    /// assert_eq!(&[104, 101, 108, 108, 111], s.as_bytes());
+    /// ```
     #[inline]
     pub fn as_bytes(&self) -> &[u8] {
         match self.is_inline() {
@@ -127,6 +229,14 @@ impl ColdString {
         }
     }
 
+    /// Returns a string slice containing the entire [`ColdString`].
+    ///
+    /// # Examples
+    /// ```
+    /// let s = cold_string::ColdString::new("hello");
+    ///
+    /// assert_eq!(s.as_str(), "hello");
+    /// ```
     #[inline]
     pub fn as_str(&self) -> &str {
         unsafe { str::from_utf8_unchecked(self.as_bytes()) }

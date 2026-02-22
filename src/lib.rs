@@ -263,6 +263,40 @@ impl AsRef<[u8]> for ColdString {
     }
 }
 
+#[cfg(feature = "serde")]
+impl serde::Serialize for ColdString {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for ColdString {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(d)?;
+        Ok(ColdString::new(&s))
+    }
+}
+
+#[cfg(all(test, feature = "serde"))]
+mod serde_tests {
+    use super::*;
+    use serde_test::{assert_tokens, Token};
+
+    #[test]
+    fn test_serde_cold_string_inline() {
+        let cs = ColdString::new("ferris");
+        assert_tokens(&cs, &[Token::Str("ferris")]);
+    }
+
+    #[test]
+    fn test_serde_cold_string_heap() {
+        let long_str = "This is a significantly longer string for heap testing";
+        let cs = ColdString::new(long_str);
+        assert_tokens(&cs, &[Token::Str(long_str)]);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

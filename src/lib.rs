@@ -373,6 +373,13 @@ impl AsRef<[u8]> for ColdString {
     }
 }
 
+impl alloc::str::FromStr for ColdString {
+    type Err = core::convert::Infallible;
+    fn from_str(s: &str) -> Result<ColdString, Self::Err> {
+        Ok(ColdString::new(s))
+    }
+}
+
 #[cfg(feature = "serde")]
 impl serde::Serialize for ColdString {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {

@@ -53,63 +53,17 @@ ptr --> <var int length> <data>
 
 ![string_memory](https://github.com/user-attachments/assets/25f5acf8-9a3e-4a4c-b2f1-b2fb972cc9c8)
 
-## Measured from System Memory
+## Memory Usage Comparison (RSS per String)
 
-### 0..=4
-```text,ignore
-Crate, len 0..=4   |      RSS (B) |  Virtual (B)
--------------------|--------------|-------------
-std                |         36.9 |         38.4
-smol_str           |         24.0 |         24.0
-compact_str        |         24.0 |         24.0
-compact_string     |         24.1 |         26.2
-cold-string        |          8.0 |          8.0
-```
+| Crate | 0–4 chars | 0–8 chars | 0–16 chars | 0–32 chars | 0–64 chars |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| `std` | 36.9 B | 38.4 B | 46.8 B | 55.3 B | 71.4 B |
+| `smol_str` | 24.0 B | 24.0 B | 24.0 B | 41.1 B | 72.2 B |
+| `compact_str` | 24.0 B | 24.0 B | 24.0 B | 35.4 B | 61.0 B |
+| `compact_string` | 24.1 B | 25.8 B | 32.6 B | 40.5 B | 56.5 B |
+| **`cold-string`** | **8.0 B** | **11.2 B** | **24.9 B** | **36.5 B** | **53.5 B** |
 
-### 0..=8
-```text,ignore
-Crate, len 0..=8   |      RSS (B) |  Virtual (B)
--------------------|--------------|-------------
-std                |         38.4 |         40.0
-smol_str           |         24.0 |         24.0
-compact_str        |         24.0 |         24.0
-compact_string     |         25.8 |         27.8
-cold-string        |         11.2 |         11.7
-```
-
-### 0..=16
-```text,ignore
-Crate, len 0..=16  |      RSS (B) |  Virtual (B)
--------------------|--------------|-------------
-std                |         46.8 |         48.6
-smol_str           |         24.0 |         24.1
-compact_str        |         24.0 |         24.0
-compact_string     |         32.6 |         34.9
-cold-string        |         24.9 |         26.7
-```
-
-### 0..=32
-```text,ignore
-Crate, len 0..=32  |      RSS (B) |  Virtual (B)
--------------------|--------------|-------------
-std                |         55.3 |         57.4
-smol_str           |         41.1 |         42.1
-compact_str        |         35.4 |         36.6
-compact_string     |         40.5 |         42.9
-cold-string        |         36.5 |         38.8
-```
-
-### 0..=64
-```text,ignore
-Crate, len 0..=64  |      RSS (B) |  Virtual (B)
--------------------|--------------|-------------
-std                |         71.4 |         73.7
-smol_str           |         72.2 |         74.3
-compact_str        |         61.0 |         63.3
-compact_string     |         56.5 |         59.1
-cold-string        |         53.5 |         56.3
-```
-
+**Note:** Columns represent string length (bytes/chars). Values represent average Resident Set Size (RSS) in bytes per string instance. Measurements taken with 10M iterations.
 
 ## License
 

@@ -1,12 +1,12 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 
+use std::alloc::{GlobalAlloc, Layout, System};
+use std::fmt::Debug;
 use std::io::Write;
-use std::iter::repeat_with;
+use std::str::FromStr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 use sysinfo::Pid;
-
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[global_allocator]
 static A: CountingAlloc = CountingAlloc;
@@ -27,18 +27,22 @@ unsafe impl GlobalAlloc for CountingAlloc {
     }
 }
 
-fn random_string<T: TryFrom<String>>(min: usize, max: usize) -> T
+fn random_string<T: FromStr>(min: usize, max: usize) -> T
 where
-    <T as TryFrom<String>>::Error: std::fmt::Debug,
+    <T as FromStr>::Err: Debug,
 {
     let len = fastrand::usize(min..=max);
-    let s: String = repeat_with(fastrand::alphanumeric).take(len).collect();
-    s.try_into().unwrap()
+    let mut scratch = [0u8; 128];
+    for i in 0..len {
+        scratch[i] = fastrand::alphanumeric() as u8;
+    }
+    let s = unsafe { std::str::from_utf8_unchecked(&scratch[..len]) };
+    s.parse().unwrap()
 }
 
-fn allocator_memory<T: TryFrom<String>>(name: &str)
+fn allocator_memory<T: FromStr>(name: &str)
 where
-    <T as TryFrom<String>>::Error: std::fmt::Debug,
+    <T as FromStr>::Err: Debug,
 {
     const SIZE: usize = 48;
     const TRIALS: usize = 100;
@@ -69,9 +73,9 @@ where
     );
 }
 
-fn system_memory<T: TryFrom<String>>(name: &str, min: usize, max: usize)
+fn system_memory<T: FromStr>(name: &str, min: usize, max: usize)
 where
-    <T as TryFrom<String>>::Error: std::fmt::Debug,
+    <T as FromStr>::Err: Debug,
 {
     let mut sys = sysinfo::System::new_all();
     let pid = Pid::from(std::process::id() as usize);

@@ -43,7 +43,7 @@ The first byte has bits 11111xxx, where xxx is the length. `self.0[1]` to `self.
 `self.0` stores the bytes of string. Since the string is UTF-8, the first byte is guaranteed to not be 10xxxxx or 11111xxx.
 
 ## Heap Mode
-`self.0` are an encoded pointer to heap, where first byte is 10xxxxxx. 10xxxxxx is chosen because it's a UTF-8 continuation byte and therefore an impossible first byte for inline mode. Since a heap-alignment of 4 is chosen, the pointer's least significant 2 bits are guaranteed to be 0 ([See more](https://doc.rust-lang.org/beta/std/alloc/struct.Layout.html#method.from_size_align)). These bits are swapped with the 10 "tag" bits when de/coding between `self.0` and the address value.
+`self.0` is an encoded pointer to heap, where first byte is 10xxxxxx. 10xxxxxx is chosen because it's a UTF-8 continuation byte and therefore an impossible first byte for inline mode. Since a heap-alignment of 4 is chosen, the pointer's least significant 2 bits are guaranteed to be 0 ([See more](https://doc.rust-lang.org/beta/std/alloc/struct.Layout.html#method.from_size_align)). These bits are swapped with the 10 "tag" bits when de/coding between `self.0` and the address value.
 
 On the heap, the data starts with a variable length integer encoding of the length, followed by the bytes.
 ```text,ignore
@@ -52,7 +52,7 @@ ptr --> <var int length> <data>
 
 # Memory Comparisons
 
-![string_memory](https://github.com/user-attachments/assets/25f5acf8-9a3e-4a4c-b2f1-b2fb972cc9c8)
+![string_memory](https://github.com/user-attachments/assets/6644ae40-1da7-42e2-9ae6-0596e77e953e)
 
 ## Memory Usage Comparison (RSS per String)
 

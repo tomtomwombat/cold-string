@@ -32,6 +32,7 @@ proptest! {
     #[test]
     fn arb_string(s in any::<String>()) {
         let cold = ColdString::new(s.as_str());
+        assert_eq!(s.len() <= 8, cold.is_inline());
         assert_eq!(cold.len(), s.len());
         assert_eq!(cold.as_str(), s.as_str());
         assert_eq!(cold, ColdString::from(s.as_str()));

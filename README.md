@@ -34,17 +34,18 @@ ColdString is an 8 byte array (4 bytes on 32-bit machines):
 ```rust,ignore
 pub struct ColdString([u8; 8]);
 ```
-The array acts as either a pointer to heap data for strings longer than 7 bytes or is the inlined data itself.
-## Inline Mode
-`self.0[1]` to `self.0[7]` store the bytes of string. In the least significant byte, `self.0[0]`, the least significant bit signifies the inline/heap flag, and is set to "1" for inline mode. The next bits encode the length (always between 0 and 7).
-```text,ignore
-b0 b1 b2 b3 b4 b5 b6 b7
-b0 = <7 bit len> | 1
-```
-For example, `"qwerty" = [13, 'q', 'w', 'e', 'r', 't', 'y', 0]`, where 13 is `"qwerty".len() << 1 | 1`.
+The array acts as either a pointer to heap data for strings longer than 8 bytes or is the inlined data itself. The first byte indicates one of 3 encodings:
+
+## Inline Mode (0 to 7 Bytes)
+The first byte has bits 11111xxx, where xxx is the length. `self.0[1]` to `self.0[7]` store the bytes of string.
+
+## Inline Mode (8 Bytes)
+`self.0` stores the bytes of string. Since the string is UTF-8, the first byte is guaranteed to not be 10xxxxx or 11111xxx.
 
 ## Heap Mode
-The bytes act as a pointer to heap. The data on the heap has alignment 2, causing the least significant bit to always be 0 (since alignment 2 implies `addr % 2 == 0`), signifying heap mode. On the heap, the data starts with a variable length integer encoding of the length, followed by the bytes.
+`self.0` are an encoded pointer to heap, where first byte is 10xxxxxx. 10xxxxxx is chosen because it's a UTF-8 continuation byte and therefore an impossible first byte for inline mode. Since a heap-alignment of 4 is chosen, the pointer's least significant 2 bits are guaranteed to be 0 ([See more](https://doc.rust-lang.org/beta/std/alloc/struct.Layout.html#method.from_size_align)). These bits are swapped with the 10 "tag" bits when de/coding between `self.0` and the address value.
+
+On the heap, the data starts with a variable length integer encoding of the length, followed by the bytes.
 ```text,ignore
 ptr --> <var int length> <data>
 ```
@@ -61,7 +62,7 @@ ptr --> <var int length> <data>
 | `smol_str` | 24.0 B | 24.0 B | 24.0 B | 41.1 B | 72.2 B |
 | `compact_str` | 24.0 B | 24.0 B | 24.0 B | 35.4 B | 61.0 B |
 | `compact_string` | 24.1 B | 25.8 B | 32.6 B | 40.5 B | 56.5 B |
-| **`cold-string`** | **8.0 B** | **11.2 B** | **24.9 B** | **36.5 B** | **53.5 B** |
+| **`cold-string`** | **8.0 B** | **8.0 B** | **23.2 B** | **35.7 B** | **53.0 B** |
 
 **Note:** Columns represent string length (bytes/chars). Values represent average Resident Set Size (RSS) in bytes per string instance. Measurements taken with 10M iterations.
 

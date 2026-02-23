@@ -21,7 +21,7 @@ use core::{
 mod vint;
 use crate::vint::VarInt;
 
-const HEAP_ALIGN: usize = 2;
+const HEAP_ALIGN: usize = 4;
 const WIDTH: usize = mem::size_of::<usize>();
 
 /// Compact representation of immutable UTF-8 strings. Optimized for memory usage and struct packing.
@@ -100,27 +100,30 @@ impl ColdString {
     /// If the string is short enough, then it will be inlined on the stack.
     pub fn new<T: AsRef<str>>(x: T) -> Self {
         let s = x.as_ref();
-        if s.len() < WIDTH {
+        if s.len() <= WIDTH {
             Self::new_inline(s)
         } else {
             Self::new_heap(s)
         }
     }
 
+    /// Returns `true` if the string bytes are inlined.
     #[inline]
-    const fn is_inline(&self) -> bool {
-        self.0[0] & 1 == 1
+    pub const fn is_inline(&self) -> bool {
+        (self.0[0] & 0b11000000) != 0b10000000
     }
 
     #[inline]
     const fn new_inline(s: &str) -> Self {
-        debug_assert!(s.len() < WIDTH);
+        debug_assert!(s.len() <= WIDTH);
         let mut buf = [0u8; WIDTH];
         unsafe {
-            let dest_ptr = buf.as_mut_ptr().add(1);
+            let dest_ptr = buf.as_mut_ptr().add((s.len() < WIDTH) as usize);
             ptr::copy_nonoverlapping(s.as_ptr(), dest_ptr, s.len());
         }
-        buf[0] = ((s.len() as u8) << 1) | 1;
+        if s.len() < WIDTH {
+            buf[0] = 0b11111000 | (s.len() as u8);
+        }
         Self(buf)
     }
 
@@ -144,22 +147,28 @@ impl ColdString {
 
             let addr = ptr.expose_provenance();
             debug_assert!(addr % 2 == 0);
+            let mut addr = addr.rotate_left(6);
+            addr |= 0b10000000;
             Self(addr.to_le_bytes())
         }
     }
 
     #[inline]
     fn heap_ptr(&self) -> *mut u8 {
-        // Can be const in 1.91
         debug_assert!(!self.is_inline());
-        let addr = usize::from_le_bytes(self.0);
+        let mut addr = usize::from_le_bytes(self.0);
+        addr ^= 0b10000000;
+        let addr = addr.rotate_right(6);
         debug_assert!(addr % 2 == 0);
-        with_exposed_provenance_mut::<u8>(addr)
+        with_exposed_provenance_mut::<u8>(addr) // const in 1.91
     }
 
     #[inline]
     const fn inline_len(&self) -> usize {
-        self.0[0] as usize >> 1
+        match self.0[0] & 0b11111000 {
+            0b11111000 => (self.0[0] & 0b00000111) as usize,
+            _ => 8,
+        }
     }
 
     /// Returns the length of this `ColdString`, in bytes, not [`char`]s or
@@ -195,7 +204,7 @@ impl ColdString {
     #[inline]
     unsafe fn decode_inline(&self) -> &[u8] {
         let len = self.inline_len();
-        let ptr = self.0.as_ptr().add(1);
+        let ptr = self.0.as_ptr().add((len < WIDTH) as usize);
         slice::from_raw_parts(ptr, len)
     }
 
@@ -433,11 +442,11 @@ mod tests {
 
     #[test]
     fn it_works() {
-        for s in ["test", "", "1234567", "longer test"] {
+        for s in ["test", "", "1234567", "12345678", "longer test"] {
             let cs = ColdString::new(s);
-            assert_eq!(cs.as_str(), s);
+            assert_eq!(s.len() <= 8, cs.is_inline());
             assert_eq!(cs.len(), s.len());
-            assert_eq!(cs.len() < 8, cs.is_inline());
+            assert_eq!(cs.as_str(), s);
             assert_eq!(cs.clone(), cs);
             #[cfg(feature = "std")]
             {
@@ -449,6 +458,20 @@ mod tests {
             assert_eq!(s, cs);
             assert_eq!(cs, *s);
             assert_eq!(*s, cs);
+        }
+    }
+
+    #[test]
+    fn test_regression() {
+        for s in [
+            str::from_utf8(&[103, 39, 240, 145, 167, 156, 194, 165]).unwrap(),
+            "AaAa0 ® ",
+            str::from_utf8(&[240, 158, 186, 128, 240, 145, 143, 151]).unwrap(),
+        ] {
+            let cs = ColdString::new(s);
+            assert_eq!(s.len() <= 8, cs.is_inline());
+            assert_eq!(s.len(), cs.len());
+            assert_eq!(cs.as_str(), s);
         }
     }
 }

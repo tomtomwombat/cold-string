@@ -5,14 +5,14 @@ use proptest::prelude::*;
 fn proptest_config() -> ProptestConfig {
     ProptestConfig {
         failure_persistence: None,
-        cases: 4,
+        cases: 8,
         ..Default::default()
     }
 }
 
 #[cfg(not(miri))]
 fn proptest_config() -> ProptestConfig {
-    ProptestConfig::with_cases(65536)
+    ProptestConfig::with_cases(131072)
 }
 
 proptest! {

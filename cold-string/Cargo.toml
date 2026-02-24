@@ -1,0 +1,29 @@
+[package]
+name = "cold-string"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.60.0"
+authors = ["tomtomwombat"]
+description = "A 1-word SSO string that saves up to 24 bytes over String."
+license = "MIT OR Apache-2.0"
+homepage = "https://github.com/tomtomwombat/cold-string/"
+repository = "https://github.com/tomtomwombat/cold-string/"
+keywords = ["string", "compact", "small", "memory"]
+categories = ["encoding", "parsing", "memory-management", "text-processing"]
+readme = "README.md"
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[features]
+default = ["std"]
+std = []
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { version = "1.0.228", optional = true }
+rustversion = "1.0.22"
+
+[dev-dependencies]
+serde_test = "1.0.177"
+proptest = {version = "=1.8.0", default-features = false, features = ["std", "bit-set"] }

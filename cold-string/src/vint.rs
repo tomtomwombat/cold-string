@@ -1,7 +1,8 @@
 pub struct VarInt;
 
 impl VarInt {
-    pub const fn write(mut value: u64, buf: &mut [u8; 10]) -> usize {
+    #[rustversion::attr(since(1.83), const)]
+    pub fn write(mut value: u64, buf: &mut [u8; 10]) -> usize {
         let mut i = 0;
         loop {
             let mut byte = (value & 0x7F) as u8;
@@ -18,8 +19,9 @@ impl VarInt {
         i
     }
 
+    #[rustversion::attr(since(1.83), const)]
     #[allow(unsafe_op_in_unsafe_fn)]
-    pub const unsafe fn read(ptr: *const u8) -> (u64, usize) {
+    pub unsafe fn read(ptr: *const u8) -> (u64, usize) {
         let mut result = 0u64;
         let mut shift = 0;
         let mut i = 0;

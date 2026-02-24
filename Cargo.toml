@@ -1,44 +1,7 @@
-[package]
-name = "cold-string"
-version = "0.1.0"
-edition = "2021"
-rust-version = "1.84.0"
-authors = ["tomtomwombat"]
-description = "A 1-word SSO string that saves up to 23 bytes over String."
-license = "MIT OR Apache-2.0"
-homepage = "https://github.com/tomtomwombat/cold-string/"
-repository = "https://github.com/tomtomwombat/cold-string/"
-keywords = ["string", "compact", "small", "memory"]
-categories = ["encoding", "parsing", "memory-management", "text-processing"]
-readme = "README.md"
+[workspace]
+members = [
+    "bench",
+]
+exclude = ["cold-string"]
 
-[badges]
-maintenance = { status = "actively-developed" }
-
-[features]
-default = ["std"]
-std = []
-serde = ["dep:serde"]
-
-[dependencies]
-serde = { version = "1.0.228", optional = true }
-
-[dev-dependencies]
-serde_test = "1.0.177"
-criterion = "0.5"
-rand = "0.8"
-proptest = "1.9.0"
-sysinfo = "0.38.2"
-fastrand = "2.3.0"
-
-compact_string = "0.1.0"
-smol_str = "0.3.5"
-compact_str = "0.9.0"
-
-[[bench]]
-name = "bench"
-harness = false
-
-[[bench]]
-name = "eq"
-harness = false
+resolver = "2"

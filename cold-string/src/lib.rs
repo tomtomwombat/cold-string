@@ -12,10 +12,10 @@ use alloc::{
 use core::{
     fmt,
     hash::{Hash, Hasher},
+    iter::FromIterator,
     mem,
     ops::Deref,
-    ptr::{self, with_exposed_provenance_mut},
-    slice, str,
+    ptr, slice, str,
 };
 
 mod vint;
@@ -44,6 +44,9 @@ const WIDTH: usize = mem::size_of::<usize>();
 pub struct ColdString([u8; WIDTH]);
 
 impl ColdString {
+    const INLINE_MASK: u8 = 0b11111000;
+    const PTR_TAG: u8 = 0b10000000;
+
     /// Convert a slice of bytes into a [`ColdString`].
     ///
     /// A [`ColdString`] is a contiguous collection of bytes (`u8`s) that is valid [`UTF-8`](https://en.wikipedia.org/wiki/UTF-8).
@@ -107,24 +110,48 @@ impl ColdString {
         }
     }
 
+    #[inline]
+    fn new_inline(s: &str) -> Self {
+        debug_assert!(s.len() <= WIDTH);
+        let mut buf = [0u8; WIDTH];
+        let start = (s.len() < WIDTH) as usize;
+        buf[start..s.len() + start].copy_from_slice(s.as_bytes());
+        if s.len() < WIDTH {
+            buf[0] = Self::INLINE_MASK | (s.len() as u8);
+        }
+        Self(buf)
+    }
+
     /// Returns `true` if the string bytes are inlined.
     #[inline]
     pub const fn is_inline(&self) -> bool {
-        (self.0[0] & 0b11000000) != 0b10000000
+        (self.0[0] & 0b11000000) != Self::PTR_TAG
     }
 
+    #[rustversion::since(1.84)]
     #[inline]
-    const fn new_inline(s: &str) -> Self {
-        debug_assert!(s.len() <= WIDTH);
-        let mut buf = [0u8; WIDTH];
-        unsafe {
-            let dest_ptr = buf.as_mut_ptr().add((s.len() < WIDTH) as usize);
-            ptr::copy_nonoverlapping(s.as_ptr(), dest_ptr, s.len());
-        }
-        if s.len() < WIDTH {
-            buf[0] = 0b11111000 | (s.len() as u8);
-        }
-        Self(buf)
+    fn ptr_to_addr<T>(ptr: *mut T) -> usize {
+        ptr.expose_provenance()
+    }
+
+    #[rustversion::before(1.84)]
+    #[inline]
+    fn ptr_to_addr<T>(ptr: *mut T) -> usize {
+        ptr as usize
+    }
+
+    #[rustversion::attr(since(1.91), const)]
+    #[rustversion::since(1.84)]
+    #[inline]
+    fn addr_to_ptr<T>(addr: usize) -> *mut T {
+        ptr::with_exposed_provenance_mut::<T>(addr)
+    }
+
+    #[rustversion::attr(since(1.83), const)]
+    #[rustversion::before(1.84)]
+    #[inline]
+    fn addr_to_ptr<T>(addr: usize) -> *mut T {
+        addr as *mut T
     }
 
     #[inline]
@@ -145,28 +172,29 @@ impl ColdString {
             ptr::copy_nonoverlapping(len_buf.as_ptr(), ptr, vint_len);
             ptr::copy_nonoverlapping(s.as_ptr(), ptr.add(vint_len), len);
 
-            let addr = ptr.expose_provenance();
-            debug_assert!(addr % 2 == 0);
+            let addr = Self::ptr_to_addr(ptr);
+            debug_assert!(addr % HEAP_ALIGN == 0);
             let mut addr = addr.rotate_left(6);
-            addr |= 0b10000000;
+            addr |= Self::PTR_TAG as usize;
             Self(addr.to_le_bytes())
         }
     }
 
+    #[rustversion::attr(since(1.91), const)]
     #[inline]
     fn heap_ptr(&self) -> *mut u8 {
         debug_assert!(!self.is_inline());
         let mut addr = usize::from_le_bytes(self.0);
-        addr ^= 0b10000000;
+        addr ^= Self::PTR_TAG as usize;
         let addr = addr.rotate_right(6);
-        debug_assert!(addr % 2 == 0);
-        with_exposed_provenance_mut::<u8>(addr) // const in 1.91
+        debug_assert!(addr % HEAP_ALIGN == 0);
+        Self::addr_to_ptr(addr)
     }
 
     #[inline]
     const fn inline_len(&self) -> usize {
-        match self.0[0] & 0b11111000 {
-            0b11111000 => (self.0[0] & 0b00000111) as usize,
+        match self.0[0] & Self::INLINE_MASK {
+            Self::INLINE_MASK => (self.0[0] & !Self::INLINE_MASK) as usize,
             _ => 8,
         }
     }
@@ -187,6 +215,7 @@ impl ColdString {
     /// assert_eq!(fancy_f.len(), 4);
     /// assert_eq!(fancy_f.chars().count(), 3);
     /// ```
+    #[rustversion::attr(since(1.91), const)]
     #[inline]
     pub fn len(&self) -> usize {
         if self.is_inline() {
@@ -450,9 +479,13 @@ mod tests {
             assert_eq!(cs.clone(), cs);
             #[cfg(feature = "std")]
             {
-                use std::hash::{BuildHasher, RandomState};
-                let bh = RandomState::new();
-                assert_eq!(bh.hash_one(&cs), bh.hash_one(&cs.clone()));
+                use std::hash::BuildHasher;
+                let bh = std::collections::hash_map::RandomState::new();
+                let mut hasher1 = bh.build_hasher();
+                cs.hash(&mut hasher1);
+                let mut hasher2 = bh.build_hasher();
+                cs.clone().hash(&mut hasher2);
+                assert_eq!(hasher1.finish(), hasher2.finish());
             }
             assert_eq!(cs, s);
             assert_eq!(s, cs);

@@ -71,7 +71,7 @@ where
 
 fn bench_eq(c: &mut Criterion) {
     bench_eq_type::<ColdString>(c, "ColdString_eq");
-    //bench_eq_type::<String>(c, "String_eq");
+    bench_eq_type::<String>(c, "String_eq");
 }
 
 criterion_group!(benches, bench_eq);

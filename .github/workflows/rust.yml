@@ -19,9 +19,9 @@ jobs:
     - name: Install cargo-hack
       run: cargo install cargo-hack
     - name: Build
-      run: cargo hack build --manifest-path cold-string/Cargo.toml --verbose --release --feature-powerset --version-range 1.60..
+      run: cargo hack build --manifest-path cold-string/Cargo.toml --verbose --feature-powerset --version-range 1.60..
     - name: Check
-      run: cargo hack check --manifest-path cold-string/Cargo.toml --verbose --release --feature-powerset --version-range 1.60..
+      run: cargo hack check --manifest-path cold-string/Cargo.toml --verbose --feature-powerset --version-range 1.60..
     - name: Test No Exposed Provenance
       run: cargo +1.74 hack test --manifest-path cold-string/Cargo.toml --verbose --release --feature-powerset
     - name: Tests
@@ -32,7 +32,7 @@ jobs:
           rustup component add miri --toolchain nightly
     - name: Run Miri
       run: |
-          cargo +nightly miri test --manifest-path cold-string/Cargo.toml --test property
+          cargo +nightly miri test --manifest-path cold-string/Cargo.toml
     - name: Run Miri Unknown
       run: |
-          cargo +nightly miri test --manifest-path cold-string/Cargo.toml --test property --target mips-unknown-linux-gnu
+          cargo +nightly miri test --manifest-path cold-string/Cargo.toml --target mips-unknown-linux-gnu

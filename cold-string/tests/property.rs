@@ -5,7 +5,7 @@ use proptest::prelude::*;
 fn proptest_config() -> ProptestConfig {
     ProptestConfig {
         failure_persistence: None,
-        cases: 8,
+        cases: 16,
         ..Default::default()
     }
 }
@@ -32,11 +32,17 @@ proptest! {
     #[test]
     fn arb_string(s in any::<String>()) {
         let cold = ColdString::new(s.as_str());
-        assert_eq!(s.len() <= 8, cold.is_inline());
+        assert_eq!(s.len() <= core::mem::size_of::<usize>(), cold.is_inline());
         assert_eq!(cold.len(), s.len());
         assert_eq!(cold.as_str(), s.as_str());
         assert_eq!(cold, ColdString::from(s.as_str()));
         assert_eq!(cold, cold.clone());
+        assert_eq!(cold, s.as_str());
+        assert_eq!(s.as_str(), cold);
+        assert_eq!(unsafe { ColdString::from_utf8_unchecked(s.as_bytes()).as_bytes() }, s.as_bytes());
+        if s.len() <= core::mem::size_of::<usize>() {
+            assert_eq!(ColdString::new_inline_const(&s), cold);
+        }
     }
 
 }

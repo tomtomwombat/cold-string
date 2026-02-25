@@ -98,36 +98,12 @@ fn bench_hash(c: &mut Criterion) {
     group.finish();
 }
 
-/*
-fn bench_eq(c: &mut Criterion) {
-    let cold1 = ColdString::from(LONG);
-    let cold2 = ColdString::from(LONG);
-
-    let string1 = String::from(LONG);
-    let string2 = String::from(LONG);
-
-    let mut group = c.benchmark_group("eq");
-
-    group.bench_function("ColdString eq", |b| {
-        b.iter(|| black_box(&cold1 == &cold2))
-    });
-
-    group.bench_function("String eq", |b| {
-        b.iter(|| black_box(&string1 == &string2))
-    });
-
-    group.finish();
-}
-*/
-
 fn bench_clone(c: &mut Criterion) {
     let cold = ColdString::from(LONG);
     let string = String::from(LONG);
 
     let mut group = c.benchmark_group("clone");
-
     group.bench_function("ColdString clone", |b| b.iter(|| black_box(cold.clone())));
-
     group.bench_function("String clone", |b| b.iter(|| black_box(string.clone())));
 
     group.finish();
@@ -139,7 +115,6 @@ criterion_group!(
     bench_len,
     bench_as_str,
     bench_hash,
-    // bench_eq,
     bench_clone
 );
 criterion_main!(benches);

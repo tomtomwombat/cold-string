@@ -1,0 +1,24 @@
+[package]
+name = "benches"
+publish = false
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cold-string = { path = "../cold-string" }
+criterion = "0.5"
+rand = "0.8"
+sysinfo = "0.38.2"
+fastrand = "2.3.0"
+
+compact_string = "0.1.0"
+smol_str = "0.3.5"
+compact_str = "0.9.0"
+
+[[bench]]
+name = "bench"
+harness = false
+
+[[bench]]
+name = "eq"
+harness = false

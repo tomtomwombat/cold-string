@@ -1,8 +1,12 @@
 #![allow(rustdoc::bare_urls)]
 #![doc = include_str!("../README.md")]
-#![cfg_attr(not(feature = "std"), no_std)]
+#![allow(unstable_name_collisions)]
+#![no_std]
 
 extern crate alloc;
+
+#[rustversion::before(1.84)]
+use sptr::Strict;
 
 use alloc::{
     alloc::{alloc, dealloc, Layout},
@@ -12,10 +16,10 @@ use alloc::{
 use core::{
     fmt,
     hash::{Hash, Hasher},
+    iter::FromIterator,
     mem,
     ops::Deref,
-    ptr::{self, with_exposed_provenance_mut},
-    slice, str,
+    ptr, slice, str,
 };
 
 mod vint;
@@ -32,18 +36,35 @@ const WIDTH: usize = mem::size_of::<usize>();
 /// assert_eq!(s.as_str(), "qwerty");
 /// ```
 /// ```
-/// use std::mem;
+/// use core::mem;
 /// use cold_string::ColdString;
 ///
-/// assert_eq!(mem::size_of::<ColdString>(), 8);
+/// assert_eq!(mem::size_of::<ColdString>(), mem::size_of::<usize>());
 /// assert_eq!(mem::align_of::<ColdString>(), 1);
-/// assert_eq!(mem::size_of::<(ColdString, u8)>(), 9);
+/// assert_eq!(mem::size_of::<(ColdString, u8)>(), mem::size_of::<usize>() + 1);
 /// assert_eq!(mem::align_of::<(ColdString, u8)>(), 1);
 /// ```
-#[repr(transparent)]
-pub struct ColdString([u8; WIDTH]);
+#[repr(packed)]
+pub struct ColdString {
+    /// The first byte of `encoded` is the "tag" and it determines the type:
+    /// - 10xxxxxx: an encoded address for the heap. To decode, 10 is set to 00 and swapped
+    ///   with the LSB bits of the tag byte. The address is always a multiple of 4 (`HEAP_ALIGN`).
+    /// - 11111xxx: xxx is the length in range 0..=7, followed by length UTF-8 bytes.
+    /// - xxxxxxxx (valid UTF-8): 8 UTF-8 bytes.
+    encoded: *mut u8,
+}
 
 impl ColdString {
+    const TAG_MASK: usize = usize::from_ne_bytes(0b11000000usize.to_le_bytes());
+    const INLINE_TAG: usize = usize::from_ne_bytes(0b11111000usize.to_le_bytes());
+    const PTR_TAG: usize = usize::from_ne_bytes(0b10000000usize.to_le_bytes());
+    const LEN_MASK: usize = usize::from_ne_bytes(0b111usize.to_le_bytes());
+    const ROT: u32 = if cfg!(target_endian = "little") {
+        0
+    } else {
+        8 * (WIDTH - 1) as u32
+    };
+
     /// Convert a slice of bytes into a [`ColdString`].
     ///
     /// A [`ColdString`] is a contiguous collection of bytes (`u8`s) that is valid [`UTF-8`](https://en.wikipedia.org/wiki/UTF-8).
@@ -97,7 +118,8 @@ impl ColdString {
     }
 
     /// Creates a new [`ColdString`] from any type that implements `AsRef<str>`.
-    /// If the string is short enough, then it will be inlined on the stack.
+    /// If the string is shorter than `core::mem::size_of::<usize>()`, then it
+    /// will be inlined on the stack.
     pub fn new<T: AsRef<str>>(x: T) -> Self {
         let s = x.as_ref();
         if s.len() <= WIDTH {
@@ -107,24 +129,91 @@ impl ColdString {
         }
     }
 
-    /// Returns `true` if the string bytes are inlined.
     #[inline]
-    pub const fn is_inline(&self) -> bool {
-        (self.0[0] & 0b11000000) != 0b10000000
+    const fn inline_buf(s: &str) -> [u8; WIDTH] {
+        debug_assert!(s.len() <= WIDTH);
+        let mut buf = [0u8; WIDTH];
+        if s.len() < WIDTH {
+            let tag =
+                (Self::INLINE_TAG | s.len().rotate_left(Self::ROT)).rotate_right(Self::ROT) as u8;
+            buf[0] = tag;
+        }
+        buf
+    }
+
+    #[rustversion::attr(since(1.61), const)]
+    #[inline]
+    fn from_inline_buf(b: [u8; WIDTH]) -> Self {
+        let encoded = ptr::null_mut::<u8>().wrapping_add(usize::from_ne_bytes(b));
+        Self { encoded }
     }
 
     #[inline]
-    const fn new_inline(s: &str) -> Self {
-        debug_assert!(s.len() <= WIDTH);
-        let mut buf = [0u8; WIDTH];
-        unsafe {
-            let dest_ptr = buf.as_mut_ptr().add((s.len() < WIDTH) as usize);
-            ptr::copy_nonoverlapping(s.as_ptr(), dest_ptr, s.len());
+    const fn utf8_start(l: usize) -> usize {
+        (l < WIDTH) as usize
+    }
+
+    #[inline]
+    fn new_inline(s: &str) -> Self {
+        let mut buf = Self::inline_buf(s);
+        let start = Self::utf8_start(s.len());
+        buf[start..s.len() + start].copy_from_slice(s.as_bytes());
+        Self::from_inline_buf(buf)
+    }
+
+    /// Creates a new inline [`ColdString`] from `&'static str` at compile time.
+    ///
+    /// In a dynamic context you can use the method [`ColdString::new()`].
+    ///
+    /// # Panics
+    /// The string must be less than `core::mem::size_of::<usize>()`. Creating
+    /// a [`ColdString`] larger than that is not supported.
+    ///
+    ///
+    /// # Examples
+    /// ```
+    /// use cold_string::ColdString;
+    ///
+    /// const DEFAULT_NAME: ColdString = ColdString::new_inline_const("cold");
+    /// ```
+    #[rustversion::since(1.61)]
+    #[inline]
+    pub const fn new_inline_const(s: &str) -> Self {
+        if s.len() > WIDTH {
+            panic!(
+                "Length for `new_inline_const` must be less than `core::mem::size_of::<usize>()`."
+            );
         }
-        if s.len() < WIDTH {
-            buf[0] = 0b11111000 | (s.len() as u8);
+        let mut buf = Self::inline_buf(s);
+        let start = Self::utf8_start(s.len());
+        let mut i = 0;
+        while i < s.len() {
+            buf[i + start] = s.as_bytes()[i];
+            i += 1;
         }
-        Self(buf)
+        Self::from_inline_buf(buf)
+    }
+
+    #[rustversion::attr(since(1.71), const)]
+    #[inline]
+    unsafe fn ptr(&self) -> *mut u8 {
+        ptr::read_unaligned(ptr::addr_of!(self.encoded))
+    }
+
+    #[inline]
+    fn addr(&self) -> usize {
+        unsafe { self.ptr().addr() }
+    }
+
+    #[inline]
+    fn tag(&self) -> usize {
+        self.addr() & Self::TAG_MASK
+    }
+
+    /// Returns `true` if the string bytes are inlined.
+    #[inline]
+    pub fn is_inline(&self) -> bool {
+        self.tag() != Self::PTR_TAG
     }
 
     #[inline]
@@ -144,30 +233,35 @@ impl ColdString {
             // TODO: can optimize this
             ptr::copy_nonoverlapping(len_buf.as_ptr(), ptr, vint_len);
             ptr::copy_nonoverlapping(s.as_ptr(), ptr.add(vint_len), len);
-
-            let addr = ptr.expose_provenance();
-            debug_assert!(addr % 2 == 0);
-            let mut addr = addr.rotate_left(6);
-            addr |= 0b10000000;
-            Self(addr.to_le_bytes())
+            let encoded = ptr.map_addr(|addr| {
+                debug_assert!(addr % HEAP_ALIGN == 0);
+                let mut addr = addr.rotate_left(6 + Self::ROT);
+                addr |= Self::PTR_TAG;
+                addr
+            });
+            Self { encoded }
         }
     }
 
     #[inline]
     fn heap_ptr(&self) -> *mut u8 {
         debug_assert!(!self.is_inline());
-        let mut addr = usize::from_le_bytes(self.0);
-        addr ^= 0b10000000;
-        let addr = addr.rotate_right(6);
-        debug_assert!(addr % 2 == 0);
-        with_exposed_provenance_mut::<u8>(addr) // const in 1.91
+        unsafe {
+            self.ptr().map_addr(|mut addr| {
+                addr ^= Self::PTR_TAG;
+                let addr = addr.rotate_right(6 + Self::ROT);
+                debug_assert!(addr % HEAP_ALIGN == 0);
+                addr
+            })
+        }
     }
 
     #[inline]
-    const fn inline_len(&self) -> usize {
-        match self.0[0] & 0b11111000 {
-            0b11111000 => (self.0[0] & 0b00000111) as usize,
-            _ => 8,
+    fn inline_len(&self) -> usize {
+        let addr = self.addr();
+        match addr & Self::INLINE_TAG {
+            Self::INLINE_TAG => (addr & Self::LEN_MASK).rotate_right(Self::ROT),
+            _ => WIDTH,
         }
     }
 
@@ -204,8 +298,10 @@ impl ColdString {
     #[inline]
     unsafe fn decode_inline(&self) -> &[u8] {
         let len = self.inline_len();
-        let ptr = self.0.as_ptr().add((len < WIDTH) as usize);
-        slice::from_raw_parts(ptr, len)
+        // SAFETY: addr_of! avoids &self.ptr (which is UB due to alignment)
+        let self_bytes_ptr = ptr::addr_of!(self.encoded) as *const u8;
+        let start = Self::utf8_start(len);
+        slice::from_raw_parts(self_bytes_ptr.add(start), len)
     }
 
     #[allow(unsafe_op_in_unsafe_fn)]
@@ -276,7 +372,11 @@ impl Drop for ColdString {
 impl Clone for ColdString {
     fn clone(&self) -> Self {
         match self.is_inline() {
-            true => Self(self.0),
+            true => unsafe {
+                Self {
+                    encoded: self.ptr(),
+                }
+            },
             false => Self::new_heap(self.as_str()),
         }
     }
@@ -285,7 +385,7 @@ impl Clone for ColdString {
 impl PartialEq for ColdString {
     fn eq(&self, other: &Self) -> bool {
         match (self.is_inline(), other.is_inline()) {
-            (true, true) => self.0 == other.0,
+            (true, true) => unsafe { self.ptr() == other.ptr() },
             (false, false) => unsafe { self.decode_heap() == other.decode_heap() },
             _ => false,
         }
@@ -302,13 +402,13 @@ impl Hash for ColdString {
 
 impl fmt::Debug for ColdString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.as_str().fmt(f)
+        fmt::Debug::fmt(self.as_str(), f)
     }
 }
 
 impl fmt::Display for ColdString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.as_str().fmt(f)
+        fmt::Display::fmt(self.as_str(), f)
     }
 }
 
@@ -426,34 +526,68 @@ mod serde_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use core::hash::BuildHasher;
+    use hashbrown::hash_map::DefaultHashBuilder;
 
     #[test]
     fn test_layout() {
-        assert_eq!(mem::size_of::<ColdString>(), 8);
+        assert_eq!(mem::size_of::<ColdString>(), mem::size_of::<usize>());
         assert_eq!(mem::align_of::<ColdString>(), 1);
         struct Foo {
             _s: ColdString,
             _b: u8,
         }
 
-        assert_eq!(mem::size_of::<Foo>(), 9);
+        assert_eq!(mem::size_of::<Foo>(), mem::size_of::<usize>() + 1);
         assert_eq!(mem::align_of::<Foo>(), 1);
     }
 
     #[test]
     fn it_works() {
-        for s in ["test", "", "1234567", "12345678", "longer test"] {
+        for s in [
+            "1",
+            "12",
+            "123",
+            "1234",
+            "12345",
+            "123456",
+            "1234567",
+            "12345678",
+            "123456789",
+            str::from_utf8(&[240, 159, 146, 150]).unwrap(),
+            "✅",
+            "❤️",
+            "🦀💯",
+            "🦀",
+            "💯",
+            "abcd",
+            "test",
+            "",
+            "\0",
+            "\0\0",
+            "\0\0\0",
+            "\0\0\0\0",
+            "\0\0\0\0\0\0\0",
+            "\0\0\0\0\0\0\0\0",
+            "1234567",
+            "12345678",
+            "longer test",
+            str::from_utf8(&[103, 39, 240, 145, 167, 156, 194, 165]).unwrap(),
+            "AaAa0 ® ",
+            str::from_utf8(&[240, 158, 186, 128, 240, 145, 143, 151]).unwrap(),
+        ] {
             let cs = ColdString::new(s);
-            assert_eq!(s.len() <= 8, cs.is_inline());
+            assert_eq!(s.len() <= mem::size_of::<usize>(), cs.is_inline());
             assert_eq!(cs.len(), s.len());
+            assert_eq!(cs.as_bytes(), s.as_bytes());
             assert_eq!(cs.as_str(), s);
             assert_eq!(cs.clone(), cs);
-            #[cfg(feature = "std")]
-            {
-                use std::hash::{BuildHasher, RandomState};
-                let bh = RandomState::new();
-                assert_eq!(bh.hash_one(&cs), bh.hash_one(&cs.clone()));
-            }
+            let bh = DefaultHashBuilder::new();
+            let mut hasher1 = bh.build_hasher();
+            cs.hash(&mut hasher1);
+            let mut hasher2 = bh.build_hasher();
+            cs.clone().hash(&mut hasher2);
+            assert_eq!(hasher1.finish(), hasher2.finish());
             assert_eq!(cs, s);
             assert_eq!(s, cs);
             assert_eq!(cs, *s);
@@ -462,16 +596,18 @@ mod tests {
     }
 
     #[test]
-    fn test_regression() {
-        for s in [
-            str::from_utf8(&[103, 39, 240, 145, 167, 156, 194, 165]).unwrap(),
-            "AaAa0 ® ",
-            str::from_utf8(&[240, 158, 186, 128, 240, 145, 143, 151]).unwrap(),
-        ] {
-            let cs = ColdString::new(s);
-            assert_eq!(s.len() <= 8, cs.is_inline());
-            assert_eq!(s.len(), cs.len());
-            assert_eq!(cs.as_str(), s);
+    fn test_unaligned_placement() {
+        for s_content in ["torture", "tor", "tortures", "tort", "torture torture"] {
+            let mut buffer = [0u8; 32];
+            for offset in 0..8 {
+                unsafe {
+                    let dst = buffer.as_mut_ptr().add(offset) as *mut ColdString;
+                    let s = ColdString::new(s_content);
+                    ptr::write_unaligned(dst, s);
+                    let recovered = ptr::read_unaligned(dst);
+                    assert_eq!(recovered.as_str(), s_content);
+                }
+            }
         }
     }
 }

@@ -20,6 +20,7 @@ use core::{
     mem,
     ops::Deref,
     ptr, slice, str,
+    cmp::Ordering,
 };
 
 mod vint;
@@ -498,6 +499,18 @@ impl AsRef<[u8]> for ColdString {
     #[inline]
     fn as_ref(&self) -> &[u8] {
         self.as_bytes()
+    }
+}
+
+impl Ord for ColdString {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.as_str().cmp(other.as_str())
+    }
+}
+
+impl PartialOrd for ColdString {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.as_str().partial_cmp(other.as_str())
     }
 }
 

@@ -32,7 +32,7 @@ def main():
     for file in sorted(csv_files):
         xs, ys = read_csv(file)
         label = os.path.splitext(os.path.basename(file))[0]
-        plt.plot(xs, ys, label=label, linewidth=3.5)
+        plt.plot(xs, ys, label=label, linewidth=3.5, alpha = 0.75)
 
     plt.xlabel("String Length")
     plt.ylabel("Memory Usage (bytes)")

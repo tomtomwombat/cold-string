@@ -63,17 +63,65 @@ ptr --> <var int length> <data>
 
 ![string_memory](https://github.com/user-attachments/assets/6644ae40-1da7-42e2-9ae6-0596e77e953e)
 
-## Memory Usage Comparison (RSS per String)
+## Memory Usage Comparison
 
-| Crate | 0–4 chars | 0–8 chars | 0–16 chars | 0–32 chars | 0–64 chars |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| `std` | 36.9 B | 38.4 B | 46.8 B | 55.3 B | 71.4 B |
-| `smol_str` | 24.0 B | 24.0 B | 24.0 B | 41.1 B | 72.2 B |
-| `compact_str` | 24.0 B | 24.0 B | 24.0 B | 35.4 B | 61.0 B |
-| `compact_string` | 24.1 B | 25.8 B | 32.6 B | 40.5 B | 56.5 B |
-| **`cold-string`** | **8.0 B** | **8.0 B** | **23.2 B** | **35.7 B** | **53.0 B** |
+RSS per insertion of various collections containing strings of random lengths 0..=N:
+
+Vec             |   0..=4 |   0..=8 |  0..=16 |  0..=32 |  0..=64
+:---              |  :---:  |  :---:  |  :---:  |  :---:  |  :---:  |
+cold-string       |     8.0 |     8.0 |    23.2 |    33.7 |    53.4
+compact_str       |    24.0 |    24.0 |    24.0 |    34.6 |    60.6
+compact_string    |    22.9 |    24.9 |    31.6 |    39.7 |    55.7
+smallstr          |    24.0 |    24.0 |    38.0 |    50.3 |    68.4
+smartstring       |    24.0 |    24.0 |    24.0 |    40.4 |    65.4
+smol_str          |    24.0 |    24.0 |    24.0 |    39.9 |    71.2
+std               |    35.8 |    37.4 |    45.8 |    54.2 |    70.5
+
+HashMap             |   0..=4 |   0..=8 |  0..=16 |  0..=32 |  0..=64
+:---              |  :---:  |  :---:  |  :---:  |  :---:  |  :---:  |
+cold-string       |    35.7 |    35.7 |    63.3 |    88.2 |   125.1
+compact_str       |   102.8 |   102.8 |   102.8 |   123.7 |   175.5
+compact_string    |    45.4 |    59.6 |    78.2 |    97.1 |   130.1
+smallstr          |   102.8 |   102.8 |   129.7 |   155.0 |   191.6
+smartstring       |   102.8 |   102.8 |   102.8 |   135.9 |   185.8
+smol_str          |   102.8 |   102.8 |   102.8 |   134.8 |   196.6
+std               |   112.8 |   123.9 |   143.2 |   161.8 |   195.3
+
+B-Tree Set             |   0..=4 |   0..=8 |  0..=16 |  0..=32 |  0..=64
+:---              |  :---:  |  :---:  |  :---:  |  :---:  |  :---:  |
+cold-string       |    10.1 |    18.9 |    49.3 |    79.1 |   117.2
+compact_str       |    24.8 |    48.4 |    61.5 |    90.5 |   145.7
+compact_string    |    19.7 |    43.7 |    67.0 |    88.3 |   122.4
+smallstr          |    24.8 |    48.1 |    89.7 |   121.9 |   162.0
+smartstring       |    24.5 |    48.6 |    61.1 |   102.3 |   155.8
+smol_str          |    25.0 |    48.3 |    61.6 |   100.7 |   166.7
+std               |    35.8 |    70.4 |   102.9 |   128.9 |   165.5
 
 **Note:** Columns represent string length (bytes/chars). Values represent average Resident Set Size (RSS) in bytes per string instance. Measurements taken with 10M iterations.
+
+## Speed
+### Construction: Variable Length (0..=N) [ns/op]
+Crate              |   0..=4    |   0..=8    |   0..=16   |   0..=32   |   0..=64  
+:---               |   :---:    |   :---:    |   :---:    |   :---:    |   :---:   
+cold-string        |       10.0 |        9.2 |       25.3 |       30.0 |       37.2
+compact_str        |        8.8 |       10.1 |       10.0 |       14.4 |       49.4
+compact_string     |       34.5 |       34.8 |       37.5 |       34.9 |       38.3
+smallstr           |        8.9 |        9.4 |       23.1 |       44.9 |       32.7
+smartstring        |       14.8 |       15.1 |       15.0 |       26.9 |       49.5
+smol_str           |       19.2 |       19.8 |       20.1 |       23.4 |       33.7
+std                |       28.6 |       31.4 |       34.9 |       32.0 |       33.1
+
+### Construction: Fixed Length (N..=N) [ns/op]
+Crate              |   4..=4    |   8..=8    |  16..=16   |  32..=32   |  64..=64
+:---               |   :---:    |   :---:    |   :---:    |   :---:    |   :---:
+cold-string        |        6.5 |        4.2 |       34.2 |       34.3 |       36.2
+compact_str        |        7.5 |        7.5 |        7.6 |       31.0 |       32.4
+compact_string     |       29.2 |       28.9 |       29.2 |       29.9 |       32.3
+smallstr           |        4.5 |        2.6 |       28.7 |       28.5 |       29.9
+smartstring        |       14.7 |       14.8 |        8.6 |       61.6 |       63.4
+smol_str           |       15.2 |       12.8 |       15.7 |       41.7 |       42.0
+std                |       28.2 |       27.6 |       28.6 |       29.3 |       30.4
+
 
 ## License
 

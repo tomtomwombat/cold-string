@@ -1,38 +1,28 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
 
+use bench::*;
 use cold_string::ColdString;
 
 const COUNT: usize = 1000;
-const LENGTHS: &[usize] = &[2, 4, 8, 16, 32];
+const LENGTHS: &[usize] = &[4, 8, 16, 32, 64];
 const RATIOS: &[f64] = &[0.0, 0.5, 1.0];
-
-fn random_ascii_string(max_len: usize, rng: &mut StdRng) -> String {
-    let len = rng.gen_range(0..=max_len);
-    (0..len)
-        .map(|_| (rng.gen_range(b'a'..=b'z')) as char)
-        .collect()
-}
 
 fn build_pairs<T>(len: usize, eq_ratio: f64) -> (Vec<T>, Vec<T>)
 where
     T: From<String>,
 {
-    let mut rng = StdRng::seed_from_u64(42);
-
     let mut left_strings = Vec::with_capacity(COUNT);
     let mut right_strings = Vec::with_capacity(COUNT);
 
     for _ in 0..COUNT {
-        left_strings.push(random_ascii_string(len, &mut rng));
+        left_strings.push(random_string::<String>(len, len));
     }
 
     for i in 0..COUNT {
-        if rng.r#gen::<f64>() < eq_ratio {
+        if fastrand::f64() < eq_ratio {
             right_strings.push(left_strings[i].clone());
         } else {
-            right_strings.push(random_ascii_string(len, &mut rng));
+            right_strings.push(random_string::<String>(len, len));
         }
     }
 

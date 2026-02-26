@@ -14,13 +14,13 @@ use alloc::{
     string::String,
 };
 use core::{
+    cmp::Ordering,
     fmt,
     hash::{Hash, Hasher},
     iter::FromIterator,
     mem,
     ops::Deref,
     ptr, slice, str,
-    cmp::Ordering,
 };
 
 mod vint;
@@ -90,8 +90,8 @@ impl ColdString {
     ///
     /// assert!(result.is_err());
     /// ```
-    pub fn from_utf8(v: &[u8]) -> Result<Self, Utf8Error> {
-        Ok(Self::new(str::from_utf8(v)?))
+    pub fn from_utf8<B: AsRef<[u8]>>(v: B) -> Result<Self, Utf8Error> {
+        Ok(Self::new(str::from_utf8(v.as_ref())?))
     }
 
     /// Converts a vector of bytes to a [`ColdString`] without checking that the string contains
@@ -114,8 +114,8 @@ impl ColdString {
     ///
     /// assert_eq!("💖", sparkle_heart);
     /// ```
-    pub unsafe fn from_utf8_unchecked(v: &[u8]) -> Self {
-        Self::new(str::from_utf8_unchecked(v))
+    pub unsafe fn from_utf8_unchecked<B: AsRef<[u8]>>(v: B) -> Self {
+        Self::new(str::from_utf8_unchecked(v.as_ref()))
     }
 
     /// Creates a new [`ColdString`] from any type that implements `AsRef<str>`.
@@ -635,10 +635,10 @@ mod tests {
             "AaAa0 ® ",
             str::from_utf8(&[240, 158, 186, 128, 240, 145, 143, 151]).unwrap(),
         ] {
-           assert_correct(s);
+            assert_correct(s);
         }
     }
-    
+
     fn char_from_leading_byte(b: u8) -> Option<char> {
         match b {
             0x00..=0x7F => Some(b as char),
@@ -646,9 +646,18 @@ mod tests {
             0xE0 => str::from_utf8(&[b, 0xA0, 0x91]).unwrap().chars().next(),
             0xE1..=0xEC | 0xEE..=0xEF => str::from_utf8(&[b, 0x91, 0xA5]).unwrap().chars().next(),
             0xED => str::from_utf8(&[b, 0x80, 0x91]).unwrap().chars().next(),
-            0xF0 => str::from_utf8(&[b, 0x90, 0x91, 0xA5]).unwrap().chars().next(),
-            0xF1..=0xF3 => str::from_utf8(&[b, 0x91, 0xA5, 0x82]).unwrap().chars().next(),
-            0xF4 => str::from_utf8(&[b, 0x80, 0x91, 0x82]).unwrap().chars().next(),
+            0xF0 => str::from_utf8(&[b, 0x90, 0x91, 0xA5])
+                .unwrap()
+                .chars()
+                .next(),
+            0xF1..=0xF3 => str::from_utf8(&[b, 0x91, 0xA5, 0x82])
+                .unwrap()
+                .chars()
+                .next(),
+            0xF4 => str::from_utf8(&[b, 0x80, 0x91, 0x82])
+                .unwrap()
+                .chars()
+                .next(),
             _ => None,
         }
     }
@@ -670,7 +679,7 @@ mod tests {
                     let c = core::char::from_digit((len - s.len()) as u32, 10).unwrap();
                     s.push(c);
                 }
-                
+
                 assert_correct(&s);
             }
         }

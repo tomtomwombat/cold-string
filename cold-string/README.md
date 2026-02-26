@@ -5,7 +5,33 @@
 ![MSRV](https://img.shields.io/crates/msrv/cold-string?style=for-the-badge)
 ![Downloads](https://img.shields.io/crates/d/cold-string?style=for-the-badge)
 
-A 1-word sized representation of immutable UTF-8 strings. In-lines up to 1 word bytes. Optimized for memory usage and struct packing.
+A 1-word (8-byte) sized representation of immutable UTF-8 strings that in-lines up to 8 bytes. Optimized for memory usage and struct packing.
+
+# Overview
+
+`ColdString` is optimized for memory efficiency for **large** and **short** strings:
+- 0..=8 bytes: always 8 bytes total (fully inlined).
+- 9..=128 bytes: 8-byte pointer + 1-byte length encoding
+- 129..=16384 bytes: 8-byte pointer + 2-byte length encoding
+- Continues logarithmically up to 18 bytes overhead for sizes up to `isize::MAX`.
+
+Compared to `String`, which stores capacity and length inline (3 machine words), `ColdString` avoids storing length inline for heap strings and compresses metadata into tagged pointer space. This leads to substantial memory savings in benchmarks (see [Memory Comparison (System RSS)](#memory-comparison-system-rss)):
+- **36% – 68%** smaller than `String` in `HashMap`
+- **28% – 65%** smaller than other short-string crates in `HashMap`
+- **30% – 75%** smaller than `String` in `BTreeSet`
+- **13% – 63%** smaller than other short-string crates in `BTreeSet`
+
+`ColdString`'s MSRV is 1.60, is `no_std` compatible, and is a drop in replacement for immutable Strings.
+
+### Safety
+`ColdString` is written using [Rust's strict provenance API](https://doc.rust-lang.org/beta/std/ptr/index.html#strict-provenance), carefully handles unaligned access internally, and is validated with property testing and MIRI.
+
+### Why "Cold"?
+
+The heap representation stores the length on the heap, not inline in the struct. This saves memory in the struct itself but *slightly* increases the cost of `len()` since it requires a heap read. In practice, the `len()` cost is only marginally slower than inline storage and is typically negligible compared to:
+- Memory savings
+- Cache density improvements
+- Faster collection operations due to reduced footprint
 
 # Usage
 
@@ -45,13 +71,13 @@ pub struct ColdString {
 ```
 `encoded` acts as either a pointer to the heap for strings longer than 8 bytes or is the inlined data itself. The first/"tag" byte indicates one of 3 encodings:
 
-## Inline Mode (0 to 7 Bytes)
+### Inline Mode (0 to 7 Bytes)
 The tag byte has bits 11111xxx, where xxx is the length. `self.0[1]` to `self.0[7]` store the bytes of string.
 
-## Inline Mode (8 Bytes)
+### Inline Mode (8 Bytes)
 The tag byte is any valid UTF-8 byte. `self.0` stores the bytes of string. Since the string is UTF-8, the tag byte is guaranteed to not be 10xxxxx or 11111xxx.
 
-## Heap Mode
+### Heap Mode
 `self.0` encodes the pointer to heap, where tag byte is 10xxxxxx. 10xxxxxx is chosen because it's a UTF-8 continuation byte and therefore an impossible tag byte for inline mode. Since a heap-alignment of 4 is chosen, the pointer's least significant 2 bits are guaranteed to be 0 ([See more](https://doc.rust-lang.org/beta/std/alloc/struct.Layout.html#method.from_size_align)). These bits are swapped with the 10 "tag" bits when de/coding between `self.0` and the address value.
 
 On the heap, the data starts with a variable length integer encoding of the length, followed by the bytes.
@@ -59,11 +85,13 @@ On the heap, the data starts with a variable length integer encoding of the leng
 ptr --> <var int length> <data>
 ```
 
-# Memory Comparisons
+# Memory Comparisons (Allocator)
+
+Memory usage per string, measured by tracking the memory requested by the allocator:
 
 ![string_memory](https://github.com/user-attachments/assets/6644ae40-1da7-42e2-9ae6-0596e77e953e)
 
-## Memory Usage Comparison
+## Memory Comparison (System RSS)
 
 RSS per insertion of various collections containing strings of random lengths 0..=N:
 

@@ -69,10 +69,11 @@ fn bench_as_str_inner<T: FromStr + AsRef<str>>(
     indices: &[usize], // Pass pre-shuffled indices
 ) {
     // Pre-convert to the target type
-    let strings: Vec<_> = strings.iter()
+    let strings: Vec<_> = strings
+        .iter()
         .map(|s| T::from_str(s).map_err(|_| ()).unwrap())
         .collect();
-    
+
     let strings = black_box(strings);
     let label = format!("{}-len={}-{}", name, min, max);
 

@@ -23,16 +23,18 @@ jobs:
     - name: Check
       run: cargo hack check --manifest-path cold-string/Cargo.toml --verbose --feature-powerset --version-range 1.60..
     - name: Test No Exposed Provenance
-      run: cargo +1.74 hack test --manifest-path cold-string/Cargo.toml --verbose --release --feature-powerset
+      run: cargo +1.74 hack test --manifest-path cold-string/Cargo.toml --verbose --feature-powerset
     - name: Tests
-      run: cargo hack test --manifest-path cold-string/Cargo.toml --verbose --release --feature-powerset
+      run: cargo hack test --manifest-path cold-string/Cargo.toml --verbose --feature-powerset
     - name: Install nightly + Miri
       run: |
           rustup toolchain install nightly
           rustup component add miri --toolchain nightly
-    - name: Run Miri
-      run: |
-          cargo +nightly miri test --manifest-path cold-string/Cargo.toml
-    - name: Run Miri Unknown
-      run: |
-          cargo +nightly miri test --manifest-path cold-string/Cargo.toml --target mips-unknown-linux-gnu
+    - name: Miri 64 bit LE
+      run: cargo +nightly miri test --manifest-path cold-string/Cargo.toml
+    - name: Miri 64 bit BE
+      run: cargo +nightly miri test --manifest-path cold-string/Cargo.toml --target powerpc64-unknown-linux-gnu
+    - name: Miri 32 bit LE
+      run: cargo +nightly miri test --target i686-unknown-linux-gnu
+    - name: Miri 32 bit BE
+      run: cargo +nightly miri test --manifest-path cold-string/Cargo.toml --target mips-unknown-linux-gnu

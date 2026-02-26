@@ -20,6 +20,7 @@ use core::{
     mem,
     ops::Deref,
     ptr, slice, str,
+    cmp::Ordering,
 };
 
 mod vint;
@@ -346,6 +347,25 @@ impl ColdString {
     pub fn as_str(&self) -> &str {
         unsafe { str::from_utf8_unchecked(self.as_bytes()) }
     }
+
+    /// Returns `true` if this `ColdString` has a length of zero, and `false` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let v = cold_string::ColdString::new("");
+    /// assert!(v.is_empty());
+    /// ```
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl Default for ColdString {
+    fn default() -> Self {
+        Self::new_inline("")
+    }
 }
 
 impl Deref for ColdString {
@@ -482,6 +502,18 @@ impl AsRef<[u8]> for ColdString {
     }
 }
 
+impl Ord for ColdString {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.as_str().cmp(other.as_str())
+    }
+}
+
+impl PartialOrd for ColdString {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.as_str().partial_cmp(other.as_str())
+    }
+}
+
 impl alloc::str::FromStr for ColdString {
     type Err = core::convert::Infallible;
     fn from_str(s: &str) -> Result<ColdString, Self::Err> {
@@ -543,6 +575,33 @@ mod tests {
     }
 
     #[test]
+    fn test_default() {
+        assert!(ColdString::default().is_empty());
+        assert_eq!(ColdString::default().len(), 0);
+        assert_eq!(ColdString::default(), "");
+        assert_eq!(ColdString::default(), ColdString::new(""));
+    }
+
+    fn assert_correct(s: &str) {
+        let cs = ColdString::new(s);
+        assert_eq!(s.len() <= mem::size_of::<usize>(), cs.is_inline());
+        assert_eq!(cs.len(), s.len());
+        assert_eq!(cs.as_bytes(), s.as_bytes());
+        assert_eq!(cs.as_str(), s);
+        assert_eq!(cs.clone(), cs);
+        let bh = DefaultHashBuilder::new();
+        let mut hasher1 = bh.build_hasher();
+        cs.hash(&mut hasher1);
+        let mut hasher2 = bh.build_hasher();
+        cs.clone().hash(&mut hasher2);
+        assert_eq!(hasher1.finish(), hasher2.finish());
+        assert_eq!(cs, s);
+        assert_eq!(s, cs);
+        assert_eq!(cs, *s);
+        assert_eq!(*s, cs);
+    }
+
+    #[test]
     fn it_works() {
         for s in [
             "1",
@@ -576,22 +635,44 @@ mod tests {
             "AaAa0 ® ",
             str::from_utf8(&[240, 158, 186, 128, 240, 145, 143, 151]).unwrap(),
         ] {
-            let cs = ColdString::new(s);
-            assert_eq!(s.len() <= mem::size_of::<usize>(), cs.is_inline());
-            assert_eq!(cs.len(), s.len());
-            assert_eq!(cs.as_bytes(), s.as_bytes());
-            assert_eq!(cs.as_str(), s);
-            assert_eq!(cs.clone(), cs);
-            let bh = DefaultHashBuilder::new();
-            let mut hasher1 = bh.build_hasher();
-            cs.hash(&mut hasher1);
-            let mut hasher2 = bh.build_hasher();
-            cs.clone().hash(&mut hasher2);
-            assert_eq!(hasher1.finish(), hasher2.finish());
-            assert_eq!(cs, s);
-            assert_eq!(s, cs);
-            assert_eq!(cs, *s);
-            assert_eq!(*s, cs);
+           assert_correct(s);
+        }
+    }
+    
+    fn char_from_leading_byte(b: u8) -> Option<char> {
+        match b {
+            0x00..=0x7F => Some(b as char),
+            0xC2..=0xDF => str::from_utf8(&[b, 0x91]).unwrap().chars().next(),
+            0xE0 => str::from_utf8(&[b, 0xA0, 0x91]).unwrap().chars().next(),
+            0xE1..=0xEC | 0xEE..=0xEF => str::from_utf8(&[b, 0x91, 0xA5]).unwrap().chars().next(),
+            0xED => str::from_utf8(&[b, 0x80, 0x91]).unwrap().chars().next(),
+            0xF0 => str::from_utf8(&[b, 0x90, 0x91, 0xA5]).unwrap().chars().next(),
+            0xF1..=0xF3 => str::from_utf8(&[b, 0x91, 0xA5, 0x82]).unwrap().chars().next(),
+            0xF4 => str::from_utf8(&[b, 0x80, 0x91, 0x82]).unwrap().chars().next(),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn test_edges() {
+        let width = mem::size_of::<usize>();
+        for len in [width - 1, width, width + 1] {
+            for first_byte in 0u8..=255 {
+                let first_char = match char_from_leading_byte(first_byte) {
+                    Some(c) => c,
+                    None => continue,
+                };
+
+                let mut s = String::with_capacity(len);
+                s.push(first_char);
+
+                while s.len() < len {
+                    let c = core::char::from_digit((len - s.len()) as u32, 10).unwrap();
+                    s.push(c);
+                }
+                
+                assert_correct(&s);
+            }
         }
     }
 

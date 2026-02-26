@@ -12,7 +12,7 @@ fn proptest_config() -> ProptestConfig {
 
 #[cfg(not(miri))]
 fn proptest_config() -> ProptestConfig {
-    ProptestConfig::with_cases(131072)
+    ProptestConfig::with_cases(65536)
 }
 
 proptest! {

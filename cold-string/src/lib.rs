@@ -346,6 +346,25 @@ impl ColdString {
     pub fn as_str(&self) -> &str {
         unsafe { str::from_utf8_unchecked(self.as_bytes()) }
     }
+
+    /// Returns `true` if this `ColdString` has a length of zero, and `false` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let v = cold_string::ColdString::new("");
+    /// assert!(v.is_empty());
+    /// ```
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl Default for ColdString {
+    fn default() -> Self {
+        Self::new_inline("")
+    }
 }
 
 impl Deref for ColdString {
@@ -540,6 +559,14 @@ mod tests {
 
         assert_eq!(mem::size_of::<Foo>(), mem::size_of::<usize>() + 1);
         assert_eq!(mem::align_of::<Foo>(), 1);
+    }
+
+    #[test]
+    fn test_default() {
+        assert!(ColdString::default().is_empty());
+        assert_eq!(ColdString::default().len(), 0);
+        assert_eq!(ColdString::default(), "");
+        assert_eq!(ColdString::default(), ColdString::new(""));
     }
 
     #[test]

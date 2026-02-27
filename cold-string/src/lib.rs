@@ -10,6 +10,8 @@ use sptr::Strict;
 
 use alloc::{
     alloc::{alloc, dealloc, Layout},
+    borrow::{Cow, ToOwned},
+    boxed::Box,
     str::Utf8Error,
     string::String,
 };
@@ -443,6 +445,43 @@ impl From<&str> for ColdString {
 impl From<String> for ColdString {
     fn from(s: String) -> Self {
         Self::new(&s)
+    }
+}
+
+impl From<ColdString> for String {
+    fn from(s: ColdString) -> Self {
+        s.as_str().to_owned()
+    }
+}
+
+impl From<ColdString> for Cow<'_, str> {
+    #[inline]
+    fn from(s: ColdString) -> Self {
+        Self::Owned(s.into())
+    }
+}
+
+impl<'a> From<&'a ColdString> for Cow<'a, str> {
+    #[inline]
+    fn from(s: &'a ColdString) -> Self {
+        Self::Borrowed(s)
+    }
+}
+
+impl<'a> From<Cow<'a, str>> for ColdString {
+    fn from(cow: Cow<'a, str>) -> Self {
+        match cow {
+            Cow::Borrowed(s) => s.into(),
+            Cow::Owned(s) => s.into(),
+        }
+    }
+}
+
+impl From<Box<str>> for ColdString {
+    #[inline]
+    #[track_caller]
+    fn from(b: Box<str>) -> Self {
+        Self::new(&b)
     }
 }
 

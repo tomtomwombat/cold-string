@@ -20,13 +20,13 @@ impl VarInt {
     }
 
     #[allow(unsafe_op_in_unsafe_fn)]
-    pub unsafe fn read(ptr: *const u8) -> (u64, usize) {
-        let mut result = 0u64;
+    pub unsafe fn read(ptr: *const u8) -> (usize, usize) {
+        let mut result = 0usize;
         let mut shift = 0;
         let mut i = 0;
         loop {
             let byte = *ptr.add(i);
-            result |= ((byte & 0x7F) as u64) << shift;
+            result |= ((byte & 0x7F) as usize) << shift;
             shift += 7;
             i += 1;
 
@@ -65,7 +65,7 @@ mod tests {
             let ptr = b.as_ptr();
             let (y, read) = unsafe { VarInt::read(ptr) };
             assert_eq!(wrote, read);
-            assert_eq!(x, y);
+            assert_eq!(x, y as u64);
         }
     }
 }

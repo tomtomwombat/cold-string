@@ -18,9 +18,11 @@ maintenance = { status = "actively-developed" }
 [features]
 default = []
 serde = ["dep:serde", "serde/alloc"]
+rkyv = ["dep:rkyv", "rkyv/alloc", "rkyv/bytecheck"]
 
 [dependencies]
 serde = { version = "1.0.228", optional = true, default-features = false }
+rkyv = { version = "0.8.15", optional = true, default-features = false }
 sptr = { version = "0.3.2", default-features = false }
 rustversion = "1.0.22"
 

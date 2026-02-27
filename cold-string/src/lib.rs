@@ -26,6 +26,9 @@ use core::{
 mod vint;
 use crate::vint::VarInt;
 
+#[cfg(feature = "rkyv")]
+mod rkyv;
+
 const HEAP_ALIGN: usize = 4;
 const WIDTH: usize = mem::size_of::<usize>();
 
@@ -310,7 +313,7 @@ impl ColdString {
         let ptr = self.heap_ptr();
         let (len, header) = VarInt::read(ptr);
         let data = ptr.add(header);
-        slice::from_raw_parts(data, len as usize)
+        slice::from_raw_parts(data, len)
     }
 
     /// Returns a byte slice of this `ColdString`'s contents.
@@ -380,7 +383,7 @@ impl Drop for ColdString {
             unsafe {
                 let ptr = self.heap_ptr();
                 let (len, header) = VarInt::read(ptr);
-                let total = header + len as usize;
+                let total = header + len;
                 let layout = Layout::from_size_align(total, HEAP_ALIGN).unwrap();
                 dealloc(ptr as *mut u8, layout);
             }

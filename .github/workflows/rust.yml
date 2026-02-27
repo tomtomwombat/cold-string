@@ -19,11 +19,11 @@ jobs:
     - name: Install cargo-hack
       run: cargo install cargo-hack
     - name: Build
-      run: cargo hack build --manifest-path cold-string/Cargo.toml --verbose --feature-powerset --version-range 1.60..
+      run: cargo hack build --manifest-path cold-string/Cargo.toml --verbose --feature-powerset --version-range 1.60.. --exclude-features rkyv
     - name: Check
-      run: cargo hack check --manifest-path cold-string/Cargo.toml --verbose --feature-powerset --version-range 1.60..
+      run: cargo hack check --manifest-path cold-string/Cargo.toml --verbose --feature-powerset --version-range 1.60.. --exclude-features rkyv
     - name: Test No Exposed Provenance
-      run: cargo +1.74 hack test --manifest-path cold-string/Cargo.toml --verbose --feature-powerset
+      run: cargo +1.74 hack test --manifest-path cold-string/Cargo.toml --verbose --feature-powerset --exclude-features rkyv
     - name: Tests
       run: cargo hack test --manifest-path cold-string/Cargo.toml --verbose --feature-powerset
     - name: Install nightly + Miri
@@ -31,10 +31,10 @@ jobs:
           rustup toolchain install nightly
           rustup component add miri --toolchain nightly
     - name: Miri 64 bit LE
-      run: cargo +nightly miri test --manifest-path cold-string/Cargo.toml
+      run: cargo +nightly miri test --all-features --manifest-path cold-string/Cargo.toml
     - name: Miri 64 bit BE
-      run: cargo +nightly miri test --manifest-path cold-string/Cargo.toml --target powerpc64-unknown-linux-gnu
+      run: cargo +nightly miri test --all-features --manifest-path cold-string/Cargo.toml --target powerpc64-unknown-linux-gnu
     - name: Miri 32 bit LE
-      run: cargo +nightly miri test --target i686-unknown-linux-gnu
+      run: cargo +nightly miri test --all-features --target i686-unknown-linux-gnu
     - name: Miri 32 bit BE
-      run: cargo +nightly miri test --manifest-path cold-string/Cargo.toml --target mips-unknown-linux-gnu
+      run: cargo +nightly miri test --all-features --manifest-path cold-string/Cargo.toml --target mips-unknown-linux-gnu

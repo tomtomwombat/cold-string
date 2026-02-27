@@ -52,7 +52,7 @@ pub struct ColdString {
     ///   with the LSB bits of the tag byte. The address is always a multiple of 4 (`HEAP_ALIGN`).
     /// - 11111xxx: xxx is the length in range 0..=7, followed by length UTF-8 bytes.
     /// - xxxxxxxx (valid UTF-8): 8 UTF-8 bytes.
-    encoded: *mut u8,
+    encoded: *const u8,
 }
 
 impl ColdString {
@@ -197,7 +197,7 @@ impl ColdString {
 
     #[rustversion::attr(since(1.71), const)]
     #[inline]
-    unsafe fn ptr(&self) -> *mut u8 {
+    unsafe fn ptr(&self) -> *const u8 {
         ptr::read_unaligned(ptr::addr_of!(self.encoded))
     }
 
@@ -220,8 +220,7 @@ impl ColdString {
     #[inline]
     fn new_heap(s: &str) -> Self {
         let len = s.len();
-        let mut len_buf = [0u8; 10];
-        let vint_len = VarInt::write(len as u64, &mut len_buf);
+        let (vint_len, len_buf) = VarInt::write(len as u64);
         let total = vint_len + len;
         let layout = Layout::from_size_align(total, HEAP_ALIGN).unwrap();
 
@@ -245,7 +244,7 @@ impl ColdString {
     }
 
     #[inline]
-    fn heap_ptr(&self) -> *mut u8 {
+    fn heap_ptr(&self) -> *const u8 {
         debug_assert!(!self.is_inline());
         unsafe {
             self.ptr().map_addr(|mut addr| {
@@ -383,7 +382,7 @@ impl Drop for ColdString {
                 let (len, header) = VarInt::read(ptr);
                 let total = header + len as usize;
                 let layout = Layout::from_size_align(total, HEAP_ALIGN).unwrap();
-                dealloc(ptr, layout);
+                dealloc(ptr as *mut u8, layout);
             }
         }
     }

@@ -1,7 +1,8 @@
 pub struct VarInt;
 
 impl VarInt {
-    pub fn write(mut value: u64, buf: &mut [u8; 10]) -> usize {
+    pub const fn write(mut value: u64) -> (usize, [u8; 10]) {
+        let mut buf = [0u8; 10];
         let mut i = 0;
         loop {
             let mut byte = (value & 0x7F) as u8;
@@ -15,7 +16,7 @@ impl VarInt {
                 break;
             }
         }
-        i
+        (i, buf)
     }
 
     #[allow(unsafe_op_in_unsafe_fn)]
@@ -59,8 +60,7 @@ mod tests {
             1 << 56,
             u64::MAX,
         ] {
-            let mut b = [0u8; 10];
-            let wrote = VarInt::write(x, &mut b);
+            let (wrote, b) = VarInt::write(x);
             assert!(wrote >= 1 && wrote <= 10);
             let ptr = b.as_ptr();
             let (y, read) = unsafe { VarInt::read(ptr) };

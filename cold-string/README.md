@@ -89,7 +89,7 @@ ptr --> <var int length> <data>
 
 Memory usage per string, measured by tracking the memory requested by the allocator:
 
-![string_memory](https://github.com/user-attachments/assets/6644ae40-1da7-42e2-9ae6-0596e77e953e)
+![string_memory](https://github.com/user-attachments/assets/adf09756-9910-4618-a97f-b5ab91a2515a)
 
 ## Memory Comparison (System RSS)
 

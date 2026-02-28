@@ -155,9 +155,9 @@ fn system_memory(name: &str, workload: impl Fn(usize, usize)) {
 /// cargo test test_system_memory --release -- --no-capture --include-ignored
 /// ```
 #[test]
+#[rustfmt::skip]
 #[ignore]
 fn test_system_memory() {
-    // Print table header
     print!("{:<NAME_WIDTH$} ", "Crate");
     for &size in SIZES {
         print!(" | {:>CELL_WIDTH$}", format!("{}..={}", 0, size));
@@ -170,13 +170,9 @@ fn test_system_memory() {
     }
     println!();
 
-    
     system_memory("cold-string", hash_map_workload::<cold_string::ColdString>);
     system_memory("compact_str", hash_map_workload::<compact_str::CompactString>);
-        system_memory(
-        "compact_string",
-        hash_map_workload::<compact_string::CompactString>,
-    );
+    system_memory("compact_string", hash_map_workload::<compact_string::CompactString>);
     system_memory("smallstr", hash_map_workload::<smallstr::SmallString<[u8; 8]>>);
     system_memory("smartstring", hash_map_workload::<smartstring::alias::String>);
     system_memory("smol_str", hash_map_workload::<smol_str::SmolStr>);

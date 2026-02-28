@@ -10,21 +10,26 @@ use sptr::Strict;
 
 use alloc::{
     alloc::{alloc, dealloc, Layout},
+    borrow::{Cow, ToOwned},
+    boxed::Box,
     str::Utf8Error,
     string::String,
 };
 use core::{
+    cmp::Ordering,
     fmt,
     hash::{Hash, Hasher},
     iter::FromIterator,
     mem,
     ops::Deref,
     ptr, slice, str,
-    cmp::Ordering,
 };
 
 mod vint;
 use crate::vint::VarInt;
+
+#[cfg(feature = "rkyv")]
+mod rkyv;
 
 const HEAP_ALIGN: usize = 4;
 const WIDTH: usize = mem::size_of::<usize>();
@@ -52,7 +57,7 @@ pub struct ColdString {
     ///   with the LSB bits of the tag byte. The address is always a multiple of 4 (`HEAP_ALIGN`).
     /// - 11111xxx: xxx is the length in range 0..=7, followed by length UTF-8 bytes.
     /// - xxxxxxxx (valid UTF-8): 8 UTF-8 bytes.
-    encoded: *mut u8,
+    encoded: *const u8,
 }
 
 impl ColdString {
@@ -90,8 +95,8 @@ impl ColdString {
     ///
     /// assert!(result.is_err());
     /// ```
-    pub fn from_utf8(v: &[u8]) -> Result<Self, Utf8Error> {
-        Ok(Self::new(str::from_utf8(v)?))
+    pub fn from_utf8<B: AsRef<[u8]>>(v: B) -> Result<Self, Utf8Error> {
+        Ok(Self::new(str::from_utf8(v.as_ref())?))
     }
 
     /// Converts a vector of bytes to a [`ColdString`] without checking that the string contains
@@ -114,8 +119,8 @@ impl ColdString {
     ///
     /// assert_eq!("💖", sparkle_heart);
     /// ```
-    pub unsafe fn from_utf8_unchecked(v: &[u8]) -> Self {
-        Self::new(str::from_utf8_unchecked(v))
+    pub unsafe fn from_utf8_unchecked<B: AsRef<[u8]>>(v: B) -> Self {
+        Self::new(str::from_utf8_unchecked(v.as_ref()))
     }
 
     /// Creates a new [`ColdString`] from any type that implements `AsRef<str>`.
@@ -197,7 +202,7 @@ impl ColdString {
 
     #[rustversion::attr(since(1.71), const)]
     #[inline]
-    unsafe fn ptr(&self) -> *mut u8 {
+    unsafe fn ptr(&self) -> *const u8 {
         ptr::read_unaligned(ptr::addr_of!(self.encoded))
     }
 
@@ -220,8 +225,7 @@ impl ColdString {
     #[inline]
     fn new_heap(s: &str) -> Self {
         let len = s.len();
-        let mut len_buf = [0u8; 10];
-        let vint_len = VarInt::write(len as u64, &mut len_buf);
+        let (vint_len, len_buf) = VarInt::write(len as u64);
         let total = vint_len + len;
         let layout = Layout::from_size_align(total, HEAP_ALIGN).unwrap();
 
@@ -245,7 +249,7 @@ impl ColdString {
     }
 
     #[inline]
-    fn heap_ptr(&self) -> *mut u8 {
+    fn heap_ptr(&self) -> *const u8 {
         debug_assert!(!self.is_inline());
         unsafe {
             self.ptr().map_addr(|mut addr| {
@@ -311,7 +315,7 @@ impl ColdString {
         let ptr = self.heap_ptr();
         let (len, header) = VarInt::read(ptr);
         let data = ptr.add(header);
-        slice::from_raw_parts(data, len as usize)
+        slice::from_raw_parts(data, len)
     }
 
     /// Returns a byte slice of this `ColdString`'s contents.
@@ -381,9 +385,9 @@ impl Drop for ColdString {
             unsafe {
                 let ptr = self.heap_ptr();
                 let (len, header) = VarInt::read(ptr);
-                let total = header + len as usize;
+                let total = header + len;
                 let layout = Layout::from_size_align(total, HEAP_ALIGN).unwrap();
-                dealloc(ptr, layout);
+                dealloc(ptr as *mut u8, layout);
             }
         }
     }
@@ -441,6 +445,43 @@ impl From<&str> for ColdString {
 impl From<String> for ColdString {
     fn from(s: String) -> Self {
         Self::new(&s)
+    }
+}
+
+impl From<ColdString> for String {
+    fn from(s: ColdString) -> Self {
+        s.as_str().to_owned()
+    }
+}
+
+impl From<ColdString> for Cow<'_, str> {
+    #[inline]
+    fn from(s: ColdString) -> Self {
+        Self::Owned(s.into())
+    }
+}
+
+impl<'a> From<&'a ColdString> for Cow<'a, str> {
+    #[inline]
+    fn from(s: &'a ColdString) -> Self {
+        Self::Borrowed(s)
+    }
+}
+
+impl<'a> From<Cow<'a, str>> for ColdString {
+    fn from(cow: Cow<'a, str>) -> Self {
+        match cow {
+            Cow::Borrowed(s) => s.into(),
+            Cow::Owned(s) => s.into(),
+        }
+    }
+}
+
+impl From<Box<str>> for ColdString {
+    #[inline]
+    #[track_caller]
+    fn from(b: Box<str>) -> Self {
+        Self::new(&b)
     }
 }
 
@@ -635,10 +676,10 @@ mod tests {
             "AaAa0 ® ",
             str::from_utf8(&[240, 158, 186, 128, 240, 145, 143, 151]).unwrap(),
         ] {
-           assert_correct(s);
+            assert_correct(s);
         }
     }
-    
+
     fn char_from_leading_byte(b: u8) -> Option<char> {
         match b {
             0x00..=0x7F => Some(b as char),
@@ -646,9 +687,18 @@ mod tests {
             0xE0 => str::from_utf8(&[b, 0xA0, 0x91]).unwrap().chars().next(),
             0xE1..=0xEC | 0xEE..=0xEF => str::from_utf8(&[b, 0x91, 0xA5]).unwrap().chars().next(),
             0xED => str::from_utf8(&[b, 0x80, 0x91]).unwrap().chars().next(),
-            0xF0 => str::from_utf8(&[b, 0x90, 0x91, 0xA5]).unwrap().chars().next(),
-            0xF1..=0xF3 => str::from_utf8(&[b, 0x91, 0xA5, 0x82]).unwrap().chars().next(),
-            0xF4 => str::from_utf8(&[b, 0x80, 0x91, 0x82]).unwrap().chars().next(),
+            0xF0 => str::from_utf8(&[b, 0x90, 0x91, 0xA5])
+                .unwrap()
+                .chars()
+                .next(),
+            0xF1..=0xF3 => str::from_utf8(&[b, 0x91, 0xA5, 0x82])
+                .unwrap()
+                .chars()
+                .next(),
+            0xF4 => str::from_utf8(&[b, 0x80, 0x91, 0x82])
+                .unwrap()
+                .chars()
+                .next(),
             _ => None,
         }
     }
@@ -670,7 +720,7 @@ mod tests {
                     let c = core::char::from_digit((len - s.len()) as u32, 10).unwrap();
                     s.push(c);
                 }
-                
+
                 assert_correct(&s);
             }
         }

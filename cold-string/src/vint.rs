@@ -42,30 +42,27 @@ impl VarInt {
 mod tests {
     use super::*;
 
+    fn assert_correct(x: u64) {
+        let (wrote, b) = VarInt::write(x);
+        assert!(wrote >= 1 && wrote <= 10);
+        let ptr = b.as_ptr();
+        let (y, read) = unsafe { VarInt::read(ptr) };
+        assert_eq!(wrote, read);
+        assert_eq!(x, y as u64);
+    }
+
     #[test]
     fn vint_round_trip() {
-        for x in [
-            0,
-            1,
-            42,
-            59243,
-            5,
-            8,
-            7,
-            63,
-            64,
-            5892389523,
-            (1 << 56) - 1,
-            5892389523582389523,
-            1 << 56,
-            u64::MAX,
-        ] {
-            let (wrote, b) = VarInt::write(x);
-            assert!(wrote >= 1 && wrote <= 10);
-            let ptr = b.as_ptr();
-            let (y, read) = unsafe { VarInt::read(ptr) };
-            assert_eq!(wrote, read);
-            assert_eq!(x, y as u64);
+        for x in [0, 1, 42, 59243, 5, 8, 7, 63, 64] {
+            assert_correct(x);
+        }
+
+        for x in 0..=u16::MAX {
+            assert_correct(x as u64);
+        }
+
+        for x in 0..=100 {
+            assert_correct(usize::MAX as u64 - x);
         }
     }
 }

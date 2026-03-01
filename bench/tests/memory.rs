@@ -3,7 +3,7 @@
 
 use bench::*;
 
-use ahash::{HashMap, HashMapExt};
+use ahash::{HashSet, HashSetExt};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cmp::Ord;
 use std::collections::BTreeMap;
@@ -78,10 +78,10 @@ fn test_allocator_memory() {
     allocator_memory::<cold_string::ColdString>("cold-string");
 }
 
-fn hash_map_workload<T: FromStr + Hash + Eq>(min: usize, max: usize) {
-    let mut strings: HashMap<T, T> = HashMap::with_capacity(TRIALS);
+fn hash_set_workload<T: FromStr + Hash + Eq>(min: usize, max: usize) {
+    let mut strings: HashSet<T> = HashSet::with_capacity(TRIALS);
     for _ in 0..TRIALS {
-        strings.insert(random_string(min, max), random_string(min, max));
+        strings.insert(random_string(min, max));
     }
     let strings = std::hint::black_box(strings);
     std::mem::forget(strings);
@@ -148,17 +148,8 @@ fn system_memory(name: &str, workload: impl Fn(usize, usize)) {
     print!("\n");
 }
 
-/// Not run automatically.
-/// Run with `cargo test test_system_memory --release -- --no-capture --include-ignored`
-/// Or specify min,max:
-/// ```
-/// cargo test test_system_memory --release -- --no-capture --include-ignored
-/// ```
-#[test]
-#[rustfmt::skip]
-#[ignore]
-fn test_system_memory() {
-    print!("{:<NAME_WIDTH$} ", "Crate");
+fn print_table_header(title: &str) {
+    print!("{:<NAME_WIDTH$} ", title);
     for &size in SIZES {
         print!(" | {:>CELL_WIDTH$}", format!("{}..={}", 0, size));
     }
@@ -169,12 +160,49 @@ fn test_system_memory() {
         print!(" {: ^CELL_WIDTH$} |", ":---:");
     }
     println!();
+}
 
-    system_memory("cold-string", hash_map_workload::<cold_string::ColdString>);
-    system_memory("compact_str", hash_map_workload::<compact_str::CompactString>);
-    system_memory("compact_string", hash_map_workload::<compact_string::CompactString>);
-    system_memory("smallstr", hash_map_workload::<smallstr::SmallString<[u8; 8]>>);
-    system_memory("smartstring", hash_map_workload::<smartstring::alias::String>);
-    system_memory("smol_str", hash_map_workload::<smol_str::SmolStr>);
-    system_memory("std", hash_map_workload::<String>);
+/// `cargo test test_system_memory_vec --release -- --no-capture --include-ignored`
+#[test]
+#[rustfmt::skip]
+#[ignore]
+fn test_system_memory_vec() {
+    print_table_header("Vec");
+    system_memory("cold-string", vec_workload::<cold_string::ColdString>);
+    system_memory("compact_str", vec_workload::<compact_str::CompactString>);
+    system_memory("compact_string", vec_workload::<compact_string::CompactString>);
+    system_memory("smallstr", vec_workload::<smallstr::SmallString<[u8; 8]>>);
+    system_memory("smartstring", vec_workload::<smartstring::alias::String>);
+    system_memory("smol_str", vec_workload::<smol_str::SmolStr>);
+    system_memory("std", vec_workload::<String>);
+}
+
+/// `cargo test test_system_memory_hashset --release -- --no-capture --include-ignored`
+#[test]
+#[rustfmt::skip]
+#[ignore]
+fn test_system_memory_hashset() {
+    print_table_header("HashSet");
+    system_memory("cold-string", hash_set_workload::<cold_string::ColdString>);
+    system_memory("compact_str", hash_set_workload::<compact_str::CompactString>);
+    system_memory("compact_string", hash_set_workload::<compact_string::CompactString>);
+    system_memory("smallstr", hash_set_workload::<smallstr::SmallString<[u8; 8]>>);
+    system_memory("smartstring", hash_set_workload::<smartstring::alias::String>);
+    system_memory("smol_str", hash_set_workload::<smol_str::SmolStr>);
+    system_memory("std", hash_set_workload::<String>);
+}
+
+/// `cargo test test_system_memory_btreeset --release -- --no-capture --include-ignored`
+#[test]
+#[rustfmt::skip]
+#[ignore]
+fn test_system_memory_btreeset() {
+    print_table_header("BTreeSet");
+    system_memory("cold-string", btree_workload::<cold_string::ColdString>);
+    system_memory("compact_str", btree_workload::<compact_str::CompactString>);
+    system_memory("compact_string", btree_workload::<compact_string::CompactString>);
+    system_memory("smallstr", btree_workload::<smallstr::SmallString<[u8; 8]>>);
+    system_memory("smartstring", btree_workload::<smartstring::alias::String>);
+    system_memory("smol_str", btree_workload::<smol_str::SmolStr>);
+    system_memory("std", btree_workload::<String>);
 }

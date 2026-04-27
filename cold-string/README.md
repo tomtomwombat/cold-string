@@ -42,16 +42,23 @@ assert_eq!(size_of::<ColdString>(), size_of::<usize>());
 assert_eq!(align_of::<ColdString>(), 1);
 
 assert_eq!(size_of::<(ColdString, u8)>(), size_of::<usize>() + 1);
-assert_eq!(size_of::<Option<ColdString>>(), size_of::<usize>() + 1);
+```
+
+It has a null-niche, so `Option<ColdString>` is the same size as `ColdString`:
+```rust
+assert_eq!(size_of::<Option<ColdString>>(), size_of::<ColdString>());
 ```
 
 ## How It Works
 
 ColdString is an 8-byte tagged pointer (4 bytes on 32-bit machines):
+
 ```rust
+use std::ptr::NonNull;
+
 #[repr(packed)]
 pub struct ColdString {
-    encoded: *mut u8,
+    encoded: NonNull<u8>,
 }
 ```
 The 8 bytes encode one of three representations indicated by the 1st byte:
@@ -61,6 +68,7 @@ least-significant 2 bits of the address are `00`. On the heap, the UTF-8 charact
 - `xxxxxxxx`: All 8 bytes are UTF-8.
 
 `10xxxxxx` and `11111xxx` are chosen because they cannot be valid first bytes of UTF-8.
+An eight character string consisting of only NUL is represented as a tagged NULL pointer.
 
 ### Why "Cold"?
 

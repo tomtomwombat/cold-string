@@ -4,7 +4,7 @@
 [![docs.rs](https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs)](https://docs.rs/cold-string)
 ![MSRV](https://img.shields.io/crates/msrv/cold-string?style=for-the-badge)
 
-A 1-word (8-byte) sized representation of immutable UTF-8 strings that in-lines up to 8 bytes. Optimized for memory usage and struct packing.
+A 1-word (8-byte) sized representation of immutable UTF-8 strings that in-lines up to 8 bytes.
 
 ## Overview
 
@@ -36,13 +36,9 @@ assert_eq!(s.as_str(), "qwerty");
 Packs well with other types:
 ```rust
 use cold_string::ColdString;
-use std::mem::{align_of, size_of};
+use std::mem::size_of;
 
 assert_eq!(size_of::<ColdString>(), size_of::<usize>());
-assert_eq!(align_of::<ColdString>(), 1);
-
-assert_eq!(size_of::<(ColdString, u8)>(), size_of::<usize>() + 1);
-
 // ColdString has a null-niche:
 assert_eq!(size_of::<Option<ColdString>>(), size_of::<ColdString>());
 ```
@@ -54,7 +50,7 @@ ColdString is an 8-byte tagged pointer (4 bytes on 32-bit machines):
 ```rust
 use std::ptr::NonNull;
 
-#[repr(packed)]
+#[repr(transparent)]
 pub struct ColdString {
     encoded: NonNull<u8>,
 }
@@ -64,9 +60,9 @@ The 8 bytes encode one of three representations indicated by the 1st byte:
 least-significant 2 bits of the address are `00`. On the heap, the UTF-8 characters are preceded by the variable-length encoding of the size. The size uses 1 byte for 0 - 127, 2 bytes for 128 - 16383, etc.
 - `11111xxx`: xxx is the length and the remaining 0-7 bytes are UTF-8 characters.
 - `xxxxxxxx`: All 8 bytes are UTF-8.
+The exception is if `encoded` is `usize::MAX`, the UTF-8 bytes are "\0\0\0\0\0\0\0\0".
 
 `10xxxxxx` and `11111xxx` are chosen because they cannot be valid first bytes of UTF-8.
-An eight character string consisting of only NUL is represented as a tagged NULL pointer.
 
 ### Why "Cold"?
 

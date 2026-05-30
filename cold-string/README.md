@@ -42,10 +42,8 @@ assert_eq!(size_of::<ColdString>(), size_of::<usize>());
 assert_eq!(align_of::<ColdString>(), 1);
 
 assert_eq!(size_of::<(ColdString, u8)>(), size_of::<usize>() + 1);
-```
 
-It has a null-niche, so `Option<ColdString>` is the same size as `ColdString`:
-```rust
+// ColdString has a null-niche:
 assert_eq!(size_of::<Option<ColdString>>(), size_of::<ColdString>());
 ```
 

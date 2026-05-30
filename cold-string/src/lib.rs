@@ -69,6 +69,7 @@ impl ColdString {
     const INLINE_TAG: usize = usize::from_ne_bytes(0b11111000usize.to_le_bytes());
     const PTR_TAG: usize = usize::from_ne_bytes(0b10000000usize.to_le_bytes());
     const LEN_MASK: usize = usize::from_ne_bytes(0b111usize.to_le_bytes());
+    const EIGHT_NUL_MAP: usize = usize::MAX;
     const ROT: u32 = if cfg!(target_endian = "little") {
         0
     } else {
@@ -143,7 +144,12 @@ impl ColdString {
     #[inline]
     fn new_eight_nul() -> Self {
         // SAFETY: PTR_TAG is non-zero
-        unsafe { Self::from_inline_buf(Self::PTR_TAG.to_ne_bytes()) }
+        unsafe { Self::from_inline_buf(Self::EIGHT_NUL_MAP.to_ne_bytes()) }
+    }
+
+    #[inline]
+    fn is_eight_nul(&self) -> bool {
+        self.addr() == Self::EIGHT_NUL_MAP
     }
 
     #[inline]
@@ -277,6 +283,7 @@ impl ColdString {
                 addr |= Self::PTR_TAG;
                 addr
             });
+            // SAFETY: encoded != 0 because Self::PTR_TAG != 0
             let encoded = NonNull::new_unchecked(encoded);
             Self { encoded }
         }
@@ -295,6 +302,7 @@ impl ColdString {
 
     #[inline]
     fn inline_len(&self) -> usize {
+        debug_assert!(!self.is_eight_nul());
         let addr = self.addr();
         match addr & Self::INLINE_TAG {
             Self::INLINE_TAG => (addr & Self::LEN_MASK).rotate_right(Self::ROT),
@@ -320,14 +328,13 @@ impl ColdString {
     /// ```
     #[inline]
     pub fn len(&self) -> usize {
-        if self.is_inline() {
+        if self.is_eight_nul() {
+            return WIDTH;
+        } else if self.is_inline() {
             self.inline_len()
         } else {
             unsafe {
                 let ptr = self.heap_ptr();
-                if ptr.is_null() {
-                    return WIDTH;
-                }
                 let (len, _) = VarInt::read(ptr);
                 len as usize
             }
@@ -337,6 +344,9 @@ impl ColdString {
     #[allow(unsafe_op_in_unsafe_fn)]
     #[inline]
     unsafe fn decode_inline(&self) -> &[u8] {
+        if self.is_eight_nul() {
+            return &EIGHT_NUL;
+        }
         let len = self.inline_len();
         // SAFETY: addr_of! avoids &self.ptr (which is UB due to alignment)
         let self_bytes_ptr = ptr::addr_of!(self.encoded) as *const u8;
@@ -348,9 +358,6 @@ impl ColdString {
     #[inline]
     unsafe fn decode_heap(&self) -> &[u8] {
         let ptr = self.heap_ptr();
-        if ptr.is_null() {
-            return &EIGHT_NUL;
-        }
         let (len, header) = VarInt::read(ptr);
         let data = ptr.add(header);
         slice::from_raw_parts(data, len)
@@ -421,9 +428,6 @@ impl Drop for ColdString {
     fn drop(&mut self) {
         if !self.is_inline() {
             let ptr = self.heap_ptr();
-            if ptr.is_null() {
-                return;
-            }
             unsafe {
                 let (len, header) = VarInt::read(ptr);
                 let total = header + len;
@@ -437,7 +441,7 @@ impl Drop for ColdString {
 
 impl Clone for ColdString {
     fn clone(&self) -> Self {
-        if self.is_inline() || self.heap_ptr().is_null() {
+        if self.is_inline() {
             let ptr = self.ptr();
             let encoded = unsafe { NonNull::new_unchecked(ptr as *mut _) };
             Self { encoded }
@@ -666,9 +670,7 @@ mod tests {
 
     fn assert_correct(s: &str) {
         let cs = ColdString::new(s);
-        if s.as_bytes() != &[0u8; WIDTH] {
-            assert_eq!(s.len() <= mem::size_of::<usize>(), cs.is_inline());
-        }
+        assert_eq!(s.len() <= mem::size_of::<usize>(), cs.is_inline());
         assert_eq!(cs.len(), s.len());
         assert_eq!(cs.as_bytes(), s.as_bytes());
         assert_eq!(cs.as_str(), s);
@@ -786,6 +788,11 @@ mod tests {
     }
 
     #[test]
+    fn ensure_zero_repr() {
+        assert!(str::from_utf8(&ColdString::EIGHT_NUL_MAP.to_ne_bytes()).is_err());
+    }
+
+    #[test]
     fn test_const_8nul_vs_non_const() {
         let nul8 = str::from_utf8(&EIGHT_NUL).unwrap();
         let const8 = ColdString::new_inline_const(nul8);
@@ -793,7 +800,6 @@ mod tests {
         let cloned = non_const.clone();
         assert_eq!(const8.ptr(), non_const.ptr());
         assert_eq!(const8.ptr(), cloned.ptr());
-        assert_eq!(non_const.heap_ptr(), ptr::null());
         // check that a null pointer will return a str pointing to EIGHT_NUL
         assert_eq!(
             &const8.as_str().as_bytes()[0] as *const u8,

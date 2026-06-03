@@ -43,6 +43,9 @@ proptest! {
         if s.len() <= core::mem::size_of::<usize>() {
             assert_eq!(ColdString::new_inline_const(&s), cold);
         }
+        let opt_s = Some(cold.clone());
+        assert_eq!(opt_s.as_ref().unwrap(), &cold);
+        assert_eq!(opt_s.as_ref().map(|x| x.as_str()), Some(s.as_str()));
     }
 
 }

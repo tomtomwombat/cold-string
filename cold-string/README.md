@@ -160,8 +160,17 @@ Type              | 8 bytes    | 128 bytes | 512 bytes
 :---              |       ---: |       ---: |       ---:
 `Arc<str>`        |         24 |         24 |         24
 `arcstr::ArcStr`  |         16 |         16 |         16
+`string_cache::DefaultAtom` |         40 |         40 |         40
 `ArcColdString`   | 0 (inline) |          9 |         10
 `ArcColdString32` | 0 (inline) |          5 |          6
+
+`string_cache::DefaultAtom` is an 8-byte atom. Strings of at most 7 bytes are
+stored inline; longer strings use a global interner whose entry contains a
+`Box<str>`, cached hash, atomic reference count, and bucket link. The table
+excludes the interner's fixed bucket array. `DefaultAtom` is used instead of a
+generated atom type because these strings are created at runtime rather than
+known at compile time. Since every measured string is unique, this workload
+does not benefit from interning duplicates.
 
 RSS bytes per unique string in a pre-sized `Vec`, measured on 64-bit Windows
 with 1,000,000 strings per subprocess. Each cell is the median of three isolated
@@ -172,6 +181,7 @@ Type              | 8 bytes | 128 bytes | 512 bytes
 :---              |    ---: |     ---: |     ---:
 `Arc<str>`        |     47.1 |      175.4 |      560.0
 `arcstr::ArcStr`  |     39.1 |      167.5 |      552.2
+`string_cache::DefaultAtom` |     71.5 |      199.5 |      586.0
 `ArcColdString`   |      8.0 |      167.5 |      552.1
 `ArcColdString32` |      8.0 |      151.4 |      536.8
 
@@ -190,12 +200,23 @@ Type             | 16 bytes | 128 bytes | 512 bytes
 `arcstr::ArcStr` |     27.19 |      28.70 |      38.46
 `ArcColdString`  |     30.12 |      32.61 |      43.70
 
+`DefaultAtom` construction is shown separately because it interns rather than
+just allocates. A unique insert hashes, locks, allocates, and adds a new entry;
+an interner hit hashes and finds an already-live entry. Input generation and
+output destruction are outside the timed region.
+
+Operation | 16 bytes | 128 bytes | 512 bytes
+:---      |     ---: |      ---: |      ---:
+Unique insert |     89.99 |     111.21 |     181.45
+Existing-string hit |     27.25 |      45.35 |     122.97
+
 Clone/reference-count increment:
 
 Type             | 16 bytes | 128 bytes | 512 bytes
 :---             |     ---: |      ---: |      ---:
 `Arc<str>`       |      3.86 |       3.82 |       3.82
 `arcstr::ArcStr` |      3.39 |       3.41 |       3.43
+`string_cache::DefaultAtom` |      3.61 |       3.61 |       3.63
 `ArcColdString`  |      3.44 |       3.45 |       3.43
 
 String access:
@@ -204,6 +225,7 @@ Type             | 16 bytes | 128 bytes | 512 bytes
 :---             |     ---: |      ---: |      ---:
 `Arc<str>`       |      1.02 |       1.03 |       1.04
 `arcstr::ArcStr` |      1.02 |       1.02 |       1.02
+`string_cache::DefaultAtom` |      1.20 |       1.20 |       1.20
 `ArcColdString`  |      1.38 |       1.68 |       1.70
 
 Non-final drop/reference-count decrement:
@@ -212,6 +234,7 @@ Type             | 16 bytes | 128 bytes | 512 bytes
 :---             |     ---: |      ---: |      ---:
 `Arc<str>`       |      2.43 |       2.49 |       2.43
 `arcstr::ArcStr` |      2.52 |       2.53 |       2.52
+`string_cache::DefaultAtom` |      2.04 |       2.04 |       2.04
 `ArcColdString`  |      2.17 |       2.18 |       2.19
 
 ## License

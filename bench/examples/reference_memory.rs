@@ -2,10 +2,17 @@ use std::{env, hint::black_box, process::Command, str};
 
 use arcstr::ArcStr;
 use cold_string::{ArcColdString, ArcColdString32};
+use string_cache::DefaultAtom;
 use sysinfo::{Pid, ProcessesToUpdate, System};
 
 const LENGTHS: &[usize] = &[8, 128, 512];
-const KINDS: &[&str] = &["Arc<str>", "ArcStr", "ArcColdString", "ArcColdString32"];
+const KINDS: &[&str] = &[
+    "Arc<str>",
+    "ArcStr",
+    "DefaultAtom",
+    "ArcColdString",
+    "ArcColdString32",
+];
 const ALPHABET: &[u8; 62] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
 fn write_unique_suffix(buf: &mut [u8], mut value: usize) {
@@ -47,6 +54,7 @@ fn child(kind: &str, len: usize, count: usize) {
     let used = match kind {
         "Arc<str>" => measure::<std::sync::Arc<str>>(len, count),
         "ArcStr" => measure::<ArcStr>(len, count),
+        "DefaultAtom" => measure::<DefaultAtom>(len, count),
         "ArcColdString" => measure::<ArcColdString>(len, count),
         "ArcColdString32" => measure::<ArcColdString32>(len, count),
         _ => panic!("unknown string kind: {kind}"),

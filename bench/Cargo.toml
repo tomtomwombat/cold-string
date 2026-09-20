@@ -13,6 +13,7 @@ criterion = "0.5"
 sysinfo = "0.38.2"
 ahash = "0.8.12"
 arcstr = { version = "1.2.0", default-features = false }
+string_cache = { version = "0.11.0", default-features = false }
 
 compact_string = "0.1.0"
 smol_str = "0.3.5"

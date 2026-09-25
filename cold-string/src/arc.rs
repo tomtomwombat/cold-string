@@ -19,6 +19,7 @@ use loom::sync::atomic::{fence, AtomicU16, AtomicU32, AtomicU8, AtomicUsize, Ord
 use portable_atomic::{fence, AtomicU16, AtomicU32, AtomicU8, AtomicUsize, Ordering::*};
 
 use crate::encoded::Encoded;
+use crate::heap::Global;
 
 #[doc(hidden)]
 pub trait RefCount: Send + Sync + 'static {
@@ -231,7 +232,7 @@ impl<A: RefCount> Drop for ArcColdStringInner<A> {
 
         fence(Acquire);
         // SAFETY: this was the last reference and the count is synchronized.
-        unsafe { self.encoded.deallocate() }
+        unsafe { self.encoded.deallocate(Global) }
     }
 }
 

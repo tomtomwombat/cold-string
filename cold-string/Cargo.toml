@@ -1,7 +1,7 @@
 [package]
 name = "cold-string"
 version = "0.4.0"
-edition = "2018"
+edition = "2021"
 rust-version = "1.60.0"
 authors = ["tomtomwombat"]
 description = "A 1-word SSO string that saves up to 24 bytes over String."
@@ -11,16 +11,20 @@ repository = "https://github.com/tomtomwombat/cold-string/"
 keywords = ["string", "compact", "small", "memory"]
 categories = ["encoding", "parsing", "memory-management", "text-processing"]
 readme = "README.md"
+resolver = "2"
 
 [badges]
 maintenance = { status = "actively-developed" }
 
 [features]
 default = []
+nightly = ["bumpalo/allocator_api"]
 serde = ["dep:serde", "serde/alloc"]
 rkyv = ["dep:rkyv", "rkyv/alloc", "rkyv/bytecheck"]
 
 [dependencies]
+# the version of allocator-api2 should be aligned with bumpalo
+allocator-api2 = { version = "0.2.8", default-features = false, features = ["alloc"] }
 serde = { version = "1.0.228", optional = true, default-features = false }
 rkyv = { version = "0.8.15", optional = true, default-features = false }
 portable-atomic = { version = "1.15.0", default-features = false, features = ["require-cas"] }
@@ -28,6 +32,7 @@ sptr = { version = "0.3.2", default-features = false }
 rustversion = "1.0.22"
 
 [dev-dependencies]
+bumpalo = { version = "3.20.3", features = ["allocator-api2"] }
 hashbrown = "0.12.3"
 serde_test = "1.0.177"
 proptest = {version = "=1.8.0", default-features = false, features = ["std", "bit-set"] }

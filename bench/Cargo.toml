@@ -35,3 +35,7 @@ harness = false
 [[bench]]
 name = "reference"
 harness = false
+
+[[bench]]
+name = "contention"
+harness = false

@@ -6,12 +6,16 @@ use core::{mem, ptr, ptr::NonNull, slice};
 #[rustversion::before(1.84)]
 use sptr::Strict;
 
-use crate::heap::{VintStringInner, HEAP_ALIGN};
+use crate::heap::{Allocator, Global, VintStringInner, HEAP_ALIGN};
 
 pub(crate) const WIDTH: usize = mem::size_of::<usize>();
 pub(crate) static WORD_NUL: [u8; WIDTH] = [0u8; WIDTH];
 
 /// The common one-word representation used by both owning string types.
+///
+/// This struct does not own the heap allocation, but it does store a pointer to it.
+/// Allocation ownership and deallocation via deallocate() is the responsibility
+/// of the users of this type.
 #[repr(transparent)]
 pub(crate) struct Encoded<H> {
     ptr: NonNull<VintStringInner<H>>,
@@ -22,6 +26,13 @@ impl<H> Copy for Encoded<H> {}
 impl<H> Clone for Encoded<H> {
     fn clone(&self) -> Self {
         *self
+    }
+}
+
+impl<H> Encoded<H> {
+    #[inline]
+    pub(crate) fn new(s: &str, header: H) -> Self {
+        Self::new_in(s, header, Global)
     }
 }
 
@@ -38,11 +49,11 @@ impl<H> Encoded<H> {
     };
 
     #[inline]
-    pub(crate) fn new(s: &str, header: H) -> Self {
+    pub(crate) fn new_in<A: Allocator>(s: &str, header: H, allocator: A) -> Self {
         if s.len() <= WIDTH {
             Self::new_inline(s)
         } else {
-            Self::from_heap(VintStringInner::allocate(header, s))
+            Self::from_heap(VintStringInner::allocate(header, s, allocator))
         }
     }
 
@@ -127,11 +138,14 @@ impl<H> Encoded<H> {
         self.as_bytes().len()
     }
 
-    /// The caller must own the heap allocation exclusively.
+    /// SAFETY: The caller must own the heap allocation exclusively,
+    /// and the allocator must be the same one used to allocate it.
+    ///
+    /// Note that cloning Encoded does not clone the heap allocation.
     #[inline]
-    pub(crate) unsafe fn deallocate(&self) {
+    pub(crate) unsafe fn deallocate<A: Allocator>(&self, allocator: A) {
         debug_assert!(!self.is_inline());
-        VintStringInner::deallocate(self.heap_ptr());
+        VintStringInner::deallocate(self.heap_ptr(), allocator);
     }
 
     #[inline]

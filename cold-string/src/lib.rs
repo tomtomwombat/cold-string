@@ -4,6 +4,8 @@
 #![allow(unstable_name_collisions)]
 #![no_std]
 
+#![cfg_attr(feature = "nightly", feature(allocator_api))]
+
 extern crate alloc;
 
 #[cfg(test)]
@@ -23,11 +25,13 @@ use core::{
     ops::Deref,
     str,
 };
+use crate::heap::Global;
 
 #[cfg(test)]
 use core::{mem, ptr};
 
 mod arc;
+mod arena;
 mod encoded;
 mod heap;
 mod vint;
@@ -36,6 +40,7 @@ pub use crate::arc::ArcColdString;
 pub use crate::arc::ArcColdString16;
 pub use crate::arc::ArcColdString32;
 pub use crate::arc::ArcColdString8;
+pub use crate::arena::ArenaString;
 use crate::encoded::Encoded;
 
 #[cfg(feature = "rkyv")]
@@ -246,7 +251,7 @@ impl Drop for ColdString {
     fn drop(&mut self) {
         if !self.is_inline() {
             // SAFETY: a non-inline `ColdString` uniquely owns its allocation.
-            unsafe { self.encoded.deallocate() }
+            unsafe { self.encoded.deallocate(Global) }
         }
     }
 }

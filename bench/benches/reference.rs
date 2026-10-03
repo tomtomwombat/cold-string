@@ -1,10 +1,11 @@
+use std::hint::black_box;
 use std::sync::Arc;
 
 use arcstr::ArcStr;
 use cold_string::ArcColdString;
 use criterion::{
-    black_box, criterion_group, criterion_main, measurement::WallTime, BatchSize, BenchmarkGroup,
-    BenchmarkId, Criterion,
+    criterion_group, criterion_main, measurement::WallTime, BatchSize, BenchmarkGroup, BenchmarkId,
+    Criterion,
 };
 
 const LENGTHS: &[usize] = &[16, 128, 512];

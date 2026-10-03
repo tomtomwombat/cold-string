@@ -1,9 +1,10 @@
 use ahash::AHashSet;
 use bench::*;
 use criterion::{
-    black_box, criterion_group, criterion_main, measurement::WallTime, BenchmarkGroup, Criterion,
+    criterion_group, criterion_main, measurement::WallTime, BenchmarkGroup, Criterion,
 };
 use std::hash::Hash;
+use std::hint::black_box;
 use std::str::FromStr;
 
 const LENGTHS: &[usize] = &[64];

@@ -168,12 +168,20 @@ with 1,000,000 strings per subprocess. Each cell is the median of three isolated
 release-mode runs and includes the `Vec` element, heap allocation, and allocator
 rounding. RSS results will vary by operating system and allocator.
 
-Type              | 8 bytes | 128 bytes | 512 bytes
-:---              |    ---: |     ---: |     ---:
-`Arc<str>`        |     47.1 |      175.4 |      560.0
-`arcstr::ArcStr`  |     39.1 |      167.5 |      552.2
-`ArcColdString`   |      8.0 |      167.5 |      552.1
-`ArcColdString32` |      8.0 |      151.4 |      536.8
+Type                              |   4..=4 |   8..=8 | 16..=16 | 32..=32 | 64..=64
+:---                              |  :---:  |  :---:  |  :---:  |  :---:  |  :---:  |
+`cold_string::ArcColdString`      |     8.0 |     8.0 |    56.3 |    70.2 |   102.4
+`cold_string::ArcColdString32`    |     8.0 |     8.0 |    38.2 |    54.5 |    86.3
+`arcstr::ArcStr`                  |    38.3 |    38.4 |    54.4 |    70.5 |   102.5
+`Arc<str>`                        |    46.3 |    46.4 |    62.4 |    78.5 |   110.6
+
+Type                              |   0..=4 |   0..=8 |  0..=16 |  0..=32 |  0..=64
+:---                              |  :---:  |  :---:  |  :---:  |  :---:  |  :---:  |
+`cold_string::ArcColdString`      |     8.0 |     8.0 |    23.2 |    38.0 |    58.0
+`cold_string::ArcColdString32`    |     8.0 |     8.0 |    21.7 |    35.9 |    55.5
+`arcstr::ArcStr`                  |    32.0 |    34.8 |    44.1 |    53.0 |    69.6
+`Arc<str>`                        |    46.4 |    46.4 |    54.0 |    62.1 |    77.9
+
 
 ### Reference Counting Speed Comparison
 
@@ -213,6 +221,13 @@ Type             | 16 bytes | 128 bytes | 512 bytes
 `Arc<str>`       |      2.43 |       2.49 |       2.43
 `arcstr::ArcStr` |      2.52 |       2.53 |       2.52
 `ArcColdString`  |      2.17 |       2.18 |       2.19
+
+Clone and drop contention across 4 threads sharing strings in a fixed size pool:
+Type                          |  Light (1024)  |  Medium (16)   |   Heavy (1)   
+:---                          |     :---:      |     :---:      |     :---:     
+`Arc<str>`                    |          26.55 |          54.69 |         144.81
+`arcstr::ArcStr`              |          29.29 |         119.39 |         214.31
+`cold_string::ArcColdString32`|           25.69 |          90.53 |         262.83
 
 ## License
 

@@ -121,12 +121,13 @@ impl<T: FromStr> FromStr for Data<T> {
 }
 
 const SIZES: &[usize] = &[4, 8, 16, 32, 64];
+const MIN_SIZE: usize = 0;
 const CELL_WIDTH: usize = 7;
-const NAME_WIDTH: usize = 16;
+const NAME_WIDTH: usize = 32;
 const TRIALS: usize = 1_000_000;
 
 fn system_memory(name: &str, workload: impl Fn(usize, usize)) {
-    print!("{:<NAME_WIDTH$} ", name);
+    print!("{:<NAME_WIDTH$} ", format!("`{}`", name));
 
     for max in SIZES {
         let mut sys = sysinfo::System::new_all();
@@ -137,7 +138,8 @@ fn system_memory(name: &str, workload: impl Fn(usize, usize)) {
         let base_mem = proc.memory();
         let base_virt = proc.virtual_memory();
 
-        workload(0, *max);
+        let min = std::cmp::min(MIN_SIZE, *max);
+        workload(min, *max);
 
         sys.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), false);
         let proc = sys.process(pid).unwrap();
@@ -150,8 +152,9 @@ fn system_memory(name: &str, workload: impl Fn(usize, usize)) {
 
 fn print_table_header(title: &str) {
     print!("{:<NAME_WIDTH$} ", title);
-    for &size in SIZES {
-        print!(" | {:>CELL_WIDTH$}", format!("{}..={}", 0, size));
+    for &max in SIZES {
+        let min = std::cmp::min(MIN_SIZE, max);
+        print!(" | {:>CELL_WIDTH$}", format!("{}..={}", min, max));
     }
     println!();
 
@@ -168,13 +171,13 @@ fn print_table_header(title: &str) {
 #[ignore]
 fn test_system_memory_vec() {
     print_table_header("Vec");
-    system_memory("cold-string", vec_workload::<cold_string::ColdString>);
-    system_memory("compact_str", vec_workload::<compact_str::CompactString>);
-    system_memory("compact_string", vec_workload::<compact_string::CompactString>);
-    system_memory("smallstr", vec_workload::<smallstr::SmallString<[u8; 8]>>);
-    system_memory("smartstring", vec_workload::<smartstring::alias::String>);
-    system_memory("smol_str", vec_workload::<smol_str::SmolStr>);
-    system_memory("std", vec_workload::<String>);
+    system_memory("cold_string::ColdString", vec_workload::<cold_string::ColdString>);
+    system_memory("compact_str::CompactString", vec_workload::<compact_str::CompactString>);
+    system_memory("compact_string::CompactString", vec_workload::<compact_string::CompactString>);
+    system_memory("smallstr::SmallString<[u8; 8]>", vec_workload::<smallstr::SmallString<[u8; 8]>>);
+    system_memory("smartstring::alias::String", vec_workload::<smartstring::alias::String>);
+    system_memory("smol_str::SmolStr", vec_workload::<smol_str::SmolStr>);
+    system_memory("String", vec_workload::<String>);
 }
 
 /// `cargo test test_system_memory_hashset --release -- --no-capture --include-ignored`
@@ -183,13 +186,13 @@ fn test_system_memory_vec() {
 #[ignore]
 fn test_system_memory_hashset() {
     print_table_header("HashSet");
-    system_memory("cold-string", hash_set_workload::<cold_string::ColdString>);
-    system_memory("compact_str", hash_set_workload::<compact_str::CompactString>);
-    system_memory("compact_string", hash_set_workload::<compact_string::CompactString>);
-    system_memory("smallstr", hash_set_workload::<smallstr::SmallString<[u8; 8]>>);
-    system_memory("smartstring", hash_set_workload::<smartstring::alias::String>);
-    system_memory("smol_str", hash_set_workload::<smol_str::SmolStr>);
-    system_memory("std", hash_set_workload::<String>);
+    system_memory("cold_string::ColdString", hash_set_workload::<cold_string::ColdString>);
+    system_memory("compact_str::CompactString", hash_set_workload::<compact_str::CompactString>);
+    system_memory("compact_string::CompactString", hash_set_workload::<compact_string::CompactString>);
+    system_memory("smallstr::SmallString<[u8; 8]>", hash_set_workload::<smallstr::SmallString<[u8; 8]>>);
+    system_memory("smartstring::alias::String", hash_set_workload::<smartstring::alias::String>);
+    system_memory("smol_str::SmolStr", hash_set_workload::<smol_str::SmolStr>);
+    system_memory("String", hash_set_workload::<String>);
 }
 
 /// `cargo test test_system_memory_btreeset --release -- --no-capture --include-ignored`
@@ -198,11 +201,23 @@ fn test_system_memory_hashset() {
 #[ignore]
 fn test_system_memory_btreeset() {
     print_table_header("BTreeSet");
-    system_memory("cold-string", btree_workload::<cold_string::ColdString>);
-    system_memory("compact_str", btree_workload::<compact_str::CompactString>);
-    system_memory("compact_string", btree_workload::<compact_string::CompactString>);
-    system_memory("smallstr", btree_workload::<smallstr::SmallString<[u8; 8]>>);
-    system_memory("smartstring", btree_workload::<smartstring::alias::String>);
-    system_memory("smol_str", btree_workload::<smol_str::SmolStr>);
-    system_memory("std", btree_workload::<String>);
+    system_memory("cold_string::ColdString", btree_workload::<cold_string::ColdString>);
+    system_memory("compact_str::CompactString", btree_workload::<compact_str::CompactString>);
+    system_memory("compact_string::CompactString", btree_workload::<compact_string::CompactString>);
+    system_memory("smallstr::SmallString<[u8; 8]>", btree_workload::<smallstr::SmallString<[u8; 8]>>);
+    system_memory("smartstring::alias::String", btree_workload::<smartstring::alias::String>);
+    system_memory("smol_str::SmolStr", btree_workload::<smol_str::SmolStr>);
+    system_memory("String", btree_workload::<String>);
+}
+
+/// `cargo test test_system_memory_arc --release -- --no-capture --include-ignored`
+#[test]
+#[rustfmt::skip]
+#[ignore]
+fn test_system_memory_arc() {
+    print_table_header("Type");
+    system_memory("cold_string::ArcColdString", vec_workload::<cold_string::ArcColdString>);
+    system_memory("cold_string::ArcColdString32", vec_workload::<cold_string::ArcColdString32>);
+    system_memory("arcstr::ArcStr", vec_workload::<arcstr::ArcStr>);
+    system_memory("Arc<str>", vec_workload::<crate::StdArcStr>);
 }

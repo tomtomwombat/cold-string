@@ -1,5 +1,7 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use std::fmt::Debug;
 use std::hint::black_box;
+use std::str::FromStr;
 
 use bench::*;
 use cold_string::ColdString;
@@ -10,7 +12,8 @@ const RATIOS: &[f64] = &[0.0, 0.5, 1.0];
 
 fn build_pairs<T>(len: usize, eq_ratio: f64) -> (Vec<T>, Vec<T>)
 where
-    T: From<String>,
+    T: FromStr,
+    <T as FromStr>::Err: Debug,
 {
     let mut left_strings = Vec::with_capacity(COUNT);
     let mut right_strings = Vec::with_capacity(COUNT);
@@ -27,15 +30,22 @@ where
         }
     }
 
-    let left = left_strings.into_iter().map(T::from).collect();
-    let right = right_strings.into_iter().map(T::from).collect();
+    let left = left_strings
+        .into_iter()
+        .map(|s| s.parse().unwrap())
+        .collect();
+    let right = right_strings
+        .into_iter()
+        .map(|s| s.parse().unwrap())
+        .collect();
 
     (left, right)
 }
 
 fn bench_eq_type<T>(c: &mut Criterion, name: &str)
 where
-    T: From<String> + PartialEq,
+    T: FromStr + PartialEq,
+    <T as FromStr>::Err: Debug,
 {
     let mut group = c.benchmark_group(name);
 
@@ -62,6 +72,7 @@ where
 
 fn bench_eq(c: &mut Criterion) {
     bench_eq_type::<ColdString>(c, "ColdString_eq");
+    bench_eq_type::<compact_string::CompactString>(c, "CompactString_eq");
     bench_eq_type::<String>(c, "String_eq");
 }
 

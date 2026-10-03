@@ -29,6 +29,10 @@ name = "eq"
 harness = false
 
 [[bench]]
+name = "len"
+harness = false
+
+[[bench]]
 name = "collection"
 harness = false
 

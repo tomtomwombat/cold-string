@@ -15,7 +15,7 @@ impl FromStr for StdArcStr {
 
 pub fn random_string<T: FromStr>(min: usize, max: usize) -> T {
     let len = fastrand::usize(min..=max);
-    let mut scratch = [0u8; 128];
+    let mut scratch = [0u8; 255];
     for byte in scratch.iter_mut().take(len) {
         *byte = fastrand::alphanumeric() as u8;
     }

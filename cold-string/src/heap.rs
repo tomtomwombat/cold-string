@@ -8,7 +8,8 @@ use core::{
 
 use crate::{encoded::WIDTH, vint::VarInt};
 
-pub(crate) const HEAP_ALIGN: usize = 4;
+pub(crate) const ALIGN_BITS: u32 = 2;
+pub(crate) const HEAP_ALIGN: usize = 1 << ALIGN_BITS;
 
 /// A heap string with an arbitrary fixed-size header followed by
 /// `[vint (length - WIDTH)][UTF-8 bytes]`.

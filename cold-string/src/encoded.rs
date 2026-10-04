@@ -6,7 +6,7 @@ use core::{mem, ptr, ptr::NonNull, slice};
 #[rustversion::before(1.84)]
 use sptr::Strict;
 
-use crate::heap::{VintStringInner, HEAP_ALIGN};
+use crate::heap::{VintStringInner, ALIGN_BITS, HEAP_ALIGN};
 
 pub(crate) const WIDTH: usize = mem::size_of::<usize>();
 pub(crate) static WORD_NUL: [u8; WIDTH] = [0u8; WIDTH];
@@ -27,10 +27,8 @@ impl<H> Clone for Encoded<H> {
 
 impl<H> Encoded<H> {
     const TAG_MASK: usize = usize::from_ne_bytes(0b11000000usize.to_le_bytes());
-    const INLINE_TAG: usize = usize::from_ne_bytes(0b11111000usize.to_le_bytes());
     const PTR_TAG: usize = usize::from_ne_bytes(0b10000000usize.to_le_bytes());
-    const LEN_MASK: usize = usize::from_ne_bytes(0b111usize.to_le_bytes());
-    pub(crate) const WORD_NUL_MAP: usize = usize::MAX;
+    pub(crate) const WORD_NUL_MAP: usize = (usize::MAX >> ALIGN_BITS * 2) << ALIGN_BITS;
     const ROT: u32 = if cfg!(target_endian = "little") {
         0
     } else {
@@ -52,10 +50,8 @@ impl<H> Encoded<H> {
         if s.as_bytes() == WORD_NUL {
             return Self::new_word_nul();
         }
-        let mut buf = Self::inline_buf(s);
-        let start = Self::utf8_start(s.len());
-        buf[start..s.len() + start].copy_from_slice(s.as_bytes());
-
+        let mut buf = [u8::MAX; WIDTH];
+        buf[0..s.len()].copy_from_slice(s.as_bytes());
         // SAFETY: short strings contain a non-zero inline tag, while a full-width
         // all-zero string was handled above.
         unsafe { Self::from_inline_buf(buf) }
@@ -69,11 +65,10 @@ impl<H> Encoded<H> {
                 "Length for `new_inline_const` must be at most `core::mem::size_of::<usize>()`."
             );
         }
-        let mut buf = Self::inline_buf(s);
-        let start = Self::utf8_start(s.len());
+        let mut buf = [u8::MAX; WIDTH];
         let mut i = 0;
         while i < s.len() {
-            buf[i + start] = s.as_bytes()[i];
+            buf[i] = s.as_bytes()[i];
             i += 1;
         }
 
@@ -89,7 +84,8 @@ impl<H> Encoded<H> {
     fn from_heap(ptr: NonNull<VintStringInner<H>>) -> Self {
         let encoded = ptr.as_ptr().map_addr(|addr| {
             debug_assert_eq!(addr % HEAP_ALIGN, 0);
-            addr.rotate_left(6 + Self::ROT) | Self::PTR_TAG
+            let rot = 8 - ALIGN_BITS + Self::ROT;
+            addr.rotate_left(rot) | Self::PTR_TAG
         });
 
         // SAFETY: the pointer tag is non-zero and `map_addr` preserves provenance.
@@ -102,7 +98,8 @@ impl<H> Encoded<H> {
     pub(crate) fn heap_ptr(&self) -> NonNull<VintStringInner<H>> {
         debug_assert!(!self.is_inline());
         let ptr = self.ptr.as_ptr();
-        let decoded = ptr.map_addr(|addr| (addr ^ Self::PTR_TAG).rotate_right(6 + Self::ROT));
+        let rot = 8 - ALIGN_BITS + Self::ROT;
+        let decoded = ptr.map_addr(|addr| (addr ^ Self::PTR_TAG).rotate_right(rot));
         debug_assert_eq!(decoded.addr() % HEAP_ALIGN, 0);
 
         // SAFETY: decoding reverses `from_heap`, so the result is non-null and
@@ -147,12 +144,13 @@ impl<H> Encoded<H> {
     #[inline]
     fn inline_len(&self) -> usize {
         debug_assert!(self.is_inline());
-        debug_assert!(!self.is_word_nul());
         let addr = self.addr();
-        match addr & Self::INLINE_TAG {
-            Self::INLINE_TAG => (addr & Self::LEN_MASK).rotate_right(Self::ROT),
-            _ => WIDTH,
-        }
+        let trailing = if cfg!(target_endian = "little") {
+            addr.leading_ones()
+        } else {
+            addr.trailing_ones()
+        };
+        WIDTH - (trailing as usize >> 3)
     }
 
     #[inline]
@@ -163,29 +161,12 @@ impl<H> Encoded<H> {
         }
         let len = self.inline_len();
         let bytes = ptr::addr_of!(self.ptr).cast::<u8>();
-        slice::from_raw_parts(bytes.add(Self::utf8_start(len)), len)
+        slice::from_raw_parts(bytes, len)
     }
 
     #[inline]
     pub(crate) fn addr(&self) -> usize {
         self.ptr.as_ptr().addr()
-    }
-
-    #[inline]
-    const fn inline_buf(s: &str) -> [u8; WIDTH] {
-        debug_assert!(s.len() <= WIDTH);
-        let mut buf = [0u8; WIDTH];
-        if s.len() < WIDTH {
-            let tag =
-                (Self::INLINE_TAG | s.len().rotate_left(Self::ROT)).rotate_right(Self::ROT) as u8;
-            buf[0] = tag;
-        }
-        buf
-    }
-
-    #[inline]
-    const fn utf8_start(len: usize) -> usize {
-        (len < WIDTH) as usize
     }
 
     #[inline]
@@ -198,6 +179,7 @@ impl<H> Encoded<H> {
     #[inline]
     const unsafe fn from_inline_buf(buf: [u8; WIDTH]) -> Self {
         let addr = usize::from_ne_bytes(buf);
+        debug_assert!(addr != 0);
         let ptr = sptr::invalid_mut::<VintStringInner<H>>(addr);
         Self {
             ptr: NonNull::new_unchecked(ptr),

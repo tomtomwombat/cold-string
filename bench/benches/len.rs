@@ -1,9 +1,7 @@
 use bench::*;
 use cold_string::ColdString;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use std::fmt::Debug;
 use std::hint::black_box;
-use std::str::FromStr;
 
 const LENGTHS: &[usize] = &[4, 8, 16, 255];
 

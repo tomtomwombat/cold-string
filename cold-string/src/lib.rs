@@ -2,6 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![allow(unknown_lints, unexpected_cfgs)]
 #![allow(unstable_name_collisions)]
+#![deny(unused_imports)]
 #![no_std]
 
 extern crate alloc;
@@ -605,7 +606,7 @@ mod tests {
     {
         let cs = T::new(s);
         assert_eq!(s.len() <= mem::size_of::<usize>(), cs.is_inline());
-        assert_eq!(cs.len(), s.len());
+        assert_eq!(cs.len(), s.len(), "error for: {:?}", s);
         assert_eq!(cs.as_bytes(), s.as_bytes());
         assert_eq!(cs.as_str().as_bytes(), s.as_bytes());
         assert_eq!(cs.clone(), cs);

@@ -1,10 +1,16 @@
-use alloc::alloc::{alloc, dealloc, handle_alloc_error, Layout};
+use alloc::alloc::{handle_alloc_error, Layout};
 use core::{
     cmp,
     mem::{align_of, size_of},
     ptr::{self, NonNull},
     slice,
 };
+
+#[cfg(not(feature = "nightly"))]
+pub use allocator_api2::alloc::{Allocator, Global};
+
+#[cfg(feature = "nightly")]
+pub use alloc::alloc::{Allocator, Global};
 
 use crate::{encoded::WIDTH, vint::VarInt};
 
@@ -40,20 +46,20 @@ impl<H> VintStringInner<H> {
         (stored_len + WIDTH, vint_len)
     }
 
+    /// The outer type must store a reference to the allocator to handle deallocation, if needed.
     #[inline]
-    pub(crate) fn allocate(header: H, s: &str) -> NonNull<Self> {
+    pub(crate) fn allocate<A: Allocator>(header: H, s: &str, allocator: A) -> NonNull<Self> {
         assert!(s.len() > WIDTH, "heap string must exceed inline capacity");
         let (vint_len, len_buf) = VarInt::write((s.len() - WIDTH) as u64);
         let layout = Self::layout(s.len(), vint_len);
 
         unsafe {
             // SAFETY: `layout` has non-zero size because the vint is at least one byte.
-            let raw = alloc(layout).cast::<Self>();
-            let ptr = match NonNull::new(raw) {
-                Some(ptr) => ptr,
-                None => handle_alloc_error(layout),
+            let ptr = match allocator.allocate(layout) {
+                Ok(ptr) => ptr.cast::<Self>(),
+                Err(_) => handle_alloc_error(layout),
             };
-
+            let raw = ptr.as_ptr();
             ptr::addr_of_mut!((*raw).header).write(header);
             let payload = Self::payload(ptr);
             ptr::copy_nonoverlapping(len_buf.as_ptr(), payload, vint_len);
@@ -70,14 +76,15 @@ impl<H> VintStringInner<H> {
         slice::from_raw_parts(payload.add(vint_len), len)
     }
 
-    /// The caller must have exclusive ownership of this allocation.
+    /// SAFETY: The caller must have exclusive ownership of this allocation,
+    /// and the allocator must be the same one used to allocate it.
     #[inline]
-    pub(crate) unsafe fn deallocate(ptr: NonNull<Self>) {
+    pub(crate) unsafe fn deallocate<A: Allocator>(ptr: NonNull<Self>, allocator: A) {
         let payload = Self::payload(ptr);
         let (len, vint_len) = Self::read_len(payload);
         let layout = Self::layout(len, vint_len);
 
         ptr::drop_in_place(ptr::addr_of_mut!((*ptr.as_ptr()).header));
-        dealloc(ptr.as_ptr().cast(), layout);
+        allocator.deallocate(ptr.cast(), layout);
     }
 }

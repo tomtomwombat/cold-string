@@ -52,15 +52,6 @@ fn bench_construction(c: &mut Criterion) {
     group.finish();
 }
 
-fn bench_len(c: &mut Criterion) {
-    let cold = ColdString::from(LONG);
-    let string = String::from(LONG);
-    let mut group = c.benchmark_group("len");
-    group.bench_function("ColdString len", |b| b.iter(|| black_box(cold.len())));
-    group.bench_function("String len", |b| b.iter(|| black_box(string.len())));
-    group.finish();
-}
-
 fn bench_as_str_inner<T: FromStr + AsRef<str>>(
     g: &mut BenchmarkGroup<'_, WallTime>,
     name: &'static str,
@@ -180,7 +171,6 @@ fn bench_clone(c: &mut Criterion) {
 criterion_group!(
     benches,
     bench_construction,
-    bench_len,
     bench_as_str,
     bench_hash,
     bench_clone

@@ -6,7 +6,7 @@ use core::{
     slice,
 };
 
-use crate::{encoded::WIDTH, vint::VarInt};
+use crate::{encoded::WIDTH, vint};
 
 pub(crate) const ALIGN_BITS: u32 = 2;
 pub(crate) const HEAP_ALIGN: usize = 1 << ALIGN_BITS;
@@ -37,14 +37,15 @@ impl<H> VintStringInner<H> {
 
     #[inline]
     unsafe fn read_len(payload: *const u8) -> (usize, usize) {
-        let (stored_len, vint_len) = VarInt::read(payload);
+        let (stored_len, vint_len) = vint::read(payload);
         (stored_len + WIDTH, vint_len)
     }
 
     #[inline]
     pub(crate) fn allocate(header: H, s: &str) -> NonNull<Self> {
         assert!(s.len() > WIDTH, "heap string must exceed inline capacity");
-        let (vint_len, len_buf) = VarInt::write((s.len() - WIDTH) as u64);
+        let stored_len = s.len() - WIDTH;
+        let (vint_len, fist_byte) = vint::write_partial(stored_len);
         let layout = Self::layout(s.len(), vint_len);
 
         unsafe {
@@ -57,7 +58,8 @@ impl<H> VintStringInner<H> {
 
             ptr::addr_of_mut!((*raw).header).write(header);
             let payload = Self::payload(ptr);
-            ptr::copy_nonoverlapping(len_buf.as_ptr(), payload, vint_len);
+            *payload = fist_byte;
+            ptr::copy_nonoverlapping(stored_len.to_le_bytes().as_ptr(), payload.add(1), WIDTH);
             ptr::copy_nonoverlapping(s.as_ptr(), payload.add(vint_len), s.len());
             ptr
         }
@@ -73,6 +75,7 @@ impl<H> VintStringInner<H> {
 
     #[inline]
     pub(crate) unsafe fn prefix<'a>(ptr: NonNull<Self>) -> &'a [u8] {
+        // SAFETY: `WIDTH` bytes are guaranteed to be on the heap
         slice::from_raw_parts(Self::payload(ptr), WIDTH)
     }
 

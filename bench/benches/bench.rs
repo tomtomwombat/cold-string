@@ -12,7 +12,7 @@ use cold_string::ColdString;
 const SHORT: &str = "qwerty";
 const LONG: &str = "this_is_a_longer_string_that_will_allocate";
 
-const LENGTHS: &[usize] = &[4, 8, 16, 32, 64];
+const LENGTHS: &[usize] = &[4, 8, 16, 32, 64, 255];
 
 fn bench_construction_inner<T: FromStr>(
     g: &mut BenchmarkGroup<'_, WallTime>,

@@ -71,6 +71,11 @@ impl<H> VintStringInner<H> {
         slice::from_raw_parts(payload.add(vint_len), len)
     }
 
+    #[inline]
+    pub(crate) unsafe fn prefix<'a>(ptr: NonNull<Self>) -> &'a [u8] {
+        slice::from_raw_parts(Self::payload(ptr), WIDTH)
+    }
+
     /// The caller must have exclusive ownership of this allocation.
     #[inline]
     pub(crate) unsafe fn deallocate(ptr: NonNull<Self>) {

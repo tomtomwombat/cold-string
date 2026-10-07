@@ -164,6 +164,14 @@ impl<H> Encoded<H> {
         slice::from_raw_parts(bytes, len)
     }
 
+    /// Returns the un-parsed first `WIDTH` bytes of heap.
+    #[inline]
+    pub(crate) fn heap_prefix(&self) -> &[u8] {
+        debug_assert!(!self.is_inline());
+        // SAFETY: `WIDTH` bytes are guaranteed to be on the heap
+        unsafe { VintStringInner::prefix(self.heap_ptr()) }
+    }
+
     #[inline]
     pub(crate) fn addr(&self) -> usize {
         self.ptr.as_ptr().addr()

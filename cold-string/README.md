@@ -10,13 +10,12 @@ A 1-word (8-byte) sized representation of immutable UTF-8 strings that in-lines 
 
 `ColdString` minimizes per-string overhead for both **short and large** strings.
 - Strings ≤ 8 bytes: **8 bytes total**
-- Larger strings: **~9–10 bytes overhead** (other string libraries have 24 bytes per value)
+- Larger strings: **~9–10 bytes overhead** (other string libraries have 24 bytes overhead)
 
-This leads to substantial memory savings over both `String` and other short-string crates (see [Memory Comparison (System RSS)](#memory-comparison-system-rss)):
-- **35% – 67%** smaller than `String` in `HashSet`
-- **35% – 64%** smaller than other short-string crates in `HashSet`
-- **30% – 75%** smaller than `String` in `BTreeSet`
-- **13% – 63%** smaller than other short-string crates in `BTreeSet`
+This leads to substantial memory savings over both `String` and other short-string crates (see [Memory Comparisons](#memory-comparison-system-rss)):
+- **35% – 67%** smaller `HashSet<S>`
+- **30% – 75%** smaller `BTreeSet<S>` (vs `String`)
+- **13% – 63%** smaller `BTreeSet<S>` (vs other crates)
 
 ---
 
@@ -63,19 +62,13 @@ assert_eq!(size_of::<Option<ColdString>>(), size_of::<ColdString>());
 
 ## How It Works
 
-ColdString is an 8-byte tagged pointer (4 bytes on 32-bit machines):
-
-Internally, both string types use a one-word tagged pointer representation.
-`ColdString` points to a `[variable-length (length - inline capacity)][UTF-8 bytes]` allocation,
-while `ArcColdString` adds an atomic reference count before the same payload.
-The 8 bytes encode one of three representations indicated by the 1st byte:
-- `10xxxxxx`: `encoded` contains a tagged heap pointer. To decode the address, clear the tag bits (`10 → 00`) and rotate so the `00` bits become the least-significant bits. The heap allocation uses [4-byte alignment](https://doc.rust-lang.org/beta/std/alloc/struct.Layout.html#method.from_size_align), guaranteeing the least-significant 2 bits of the address are `00`. On the heap, the UTF-8 characters are preceded by a variable-length encoding of `length - size_of::<usize>()`, since strings up to one word are stored inline. Encoded values 1–127 use one byte, 128–16,383 use two bytes, and so on. On a 64-bit target, those ranges correspond to actual string lengths 9–135 and 136–16,391.
-- `11111xxx`: xxx is the length and the remaining 0-7 bytes are UTF-8 characters.
-- `xxxxxxxx`: All 8 bytes are UTF-8.
-
-The exception is if `encoded` is `usize::MAX`, which represents one word of NUL bytes.
-
-`10xxxxxx` and `11111xxx` are chosen because they cannot be valid first bytes of UTF-8.
+ColdString is an 8-byte tagged `NonNull` pointer (4 bytes on 32-bit machines) that has one of 3 representations:
+- the first byte is `10xxxxxx`: The pointer encodes a heap address pointing to the length followed by the UTF-8 bytes. Rotating the `10` to the least significant position and setting to `00` decodes to the address (the heap allocation uses [4-byte alignment](https://doc.rust-lang.org/beta/std/alloc/struct.Layout.html#method.from_size_align)). The length of string is encoded with a variable length int that requires 1 bytes for 9–135 length, 2 bytes for lengths 136–16,391, etc.
+- otherwise, the string is inlined: the pointer represent 0-8 UTF-8 bytes, starting from the first byte. Trailing bytes are `0xFF`, and the length is calculated from `trailing_ones`.
+- the one exception to the rule above is if the whole pointer is exactly `(usize::MAX >> 4) << 2`, in which the string represents `"\0\0\0\0\0\0\0\0"` (an invalid value for `NonNull`). This number is chosen because
+  - the first 2 bits are 0, classifying it as inlined,
+  - it's an impossible UTF-8 representation, so doesn't collide with other inlined strings.
+  - it's symmetrical, so it's the same on big or little endian.
 
 ### Why "Cold"?
 

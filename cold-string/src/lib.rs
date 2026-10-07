@@ -58,13 +58,6 @@ mod rkyv;
 /// ```
 #[repr(transparent)]
 pub struct ColdString {
-    /// The first byte of `encoded` is the "tag" and it determines the type:
-    /// - 10xxxxxx: an encoded address for the heap. To decode, 10 is set to 00 and swapped
-    ///   with the LSB bits of the tag byte. The address is always a multiple of 4 (`HEAP_ALIGN`).
-    /// - 11111xxx: xxx is the length in range 0..=7, followed by length UTF-8 bytes.
-    /// - xxxxxxxx (valid UTF-8): 8 UTF-8 bytes.
-    ///
-    /// The exception is if `encoded` is `usize::MAX`, which represents one word of NUL bytes.
     encoded: Encoded<()>,
 }
 

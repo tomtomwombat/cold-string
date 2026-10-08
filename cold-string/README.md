@@ -5,22 +5,13 @@
 ![MSRV](https://img.shields.io/crates/msrv/cold-string?style=for-the-badge)
 
 A 1-word (8-byte) sized representation of immutable UTF-8 strings that in-lines up to 8 bytes.
-
-## Overview
-
-`ColdString` minimizes per-string overhead for both **short and large** strings.
-- Strings ≤ 8 bytes: **8 bytes total**
-- Larger strings: **~9–10 bytes overhead** (other string libraries have 24 bytes overhead)
-
-This leads to substantial memory savings over both `String` and other short-string crates (see [Memory Comparisons](#memory-comparison-system-rss)):
-- **35% – 67%** smaller `HashSet<S>`
-- **30% – 75%** smaller `BTreeSet<S>` (vs `String`)
-- **13% – 63%** smaller `BTreeSet<S>` (vs other crates)
-
----
-
-### Portability
-`ColdString`'s MSRV is 1.60, is `no_std` compatible, and is a drop in replacement for immutable Strings.
+- Strings ≤ 8 bytes require no allocation
+- Compact variable-sized length encoding
+- Up to 67% smaller than other short-string optimizations (see [Memory Comparisons](#memory-comparison-system-rss))
+- Atomic reference counting support
+- Niche optimized: `Option<ColdString>` is the same size as `ColdString`
+- `no_std` compatible, MSRV 1.60
+- Uses strict provenance API. Miri, loom, and property tested (see [Safety](#safety))
 
 ## Usage
 
@@ -30,6 +21,13 @@ use cold_string::ColdString;
 
 let s = ColdString::new("qwerty");
 assert_eq!(s.as_str(), "qwerty");
+```
+```rust
+use cold_string::ColdString;
+use std::mem::size_of;
+
+assert_eq!(size_of::<ColdString>(), size_of::<usize>());
+assert_eq!(size_of::<Option<ColdString>>(), size_of::<ColdString>());
 ```
 
 Use `ArcColdString` when clones should share long-string storage:
@@ -42,23 +40,7 @@ let second = first.clone();
 assert_eq!(first, second);
 ```
 
-`ArcColdString` uses a native-width reference count. `ArcColdString8`,
-`ArcColdString16`, and `ArcColdString32` use 1-, 2-, and 4-byte counts when a
-smaller heap header is preferable. All variants remain one word in size.
-
-Both types keep strings up to one machine word inline. For longer strings,
-`ArcColdString` stores `[atomic reference count][variable-length length][UTF-8 bytes]`
-in one allocation and does not support weak references.
-
-Packs well with other types:
-```rust
-use cold_string::ColdString;
-use std::mem::size_of;
-
-assert_eq!(size_of::<ColdString>(), size_of::<usize>());
-// ColdString has a null-niche:
-assert_eq!(size_of::<Option<ColdString>>(), size_of::<ColdString>());
-```
+`ArcColdString` uses a native-width reference count. `ArcColdString8`, `ArcColdString16`, and `ArcColdString32` use 1-, 2-, and 4-byte counts when a smaller heap header is preferable. All variants remain one word in size and inline up to 8 bytes.
 
 ## How It Works
 
@@ -70,6 +52,14 @@ ColdString is an 8-byte tagged `NonNull` pointer (4 bytes on 32-bit machines) th
   - it's an impossible UTF-8 representation, so doesn't collide with other inlined strings.
   - it's symmetrical, so it's the same on big or little endian.
 
+This design minimizes per-string overhead for both **short and large** strings (counting everything except the UTF-8 payload bytes):
+| Representation | 0–8 | 9–256 | 257–511 | 512–65,791 | 65,792–16,777,471 | `usize::MAX` |
+|---|---:|---:|---:|---:|---:|---:|
+| `ColdString` | 8 bytes | 9 bytes | 10 bytes | 11 bytes | 12 bytes | 17 bytes |
+| `String` | 24 bytes | 24 bytes | 24 bytes | 24 bytes | 24 bytes | 24 bytes |
+
+`ArcColdString` stores `[atomic reference count][variable-length length][UTF-8 bytes]` in one allocation and does not support weak references.
+
 ### Why "Cold"?
 
 The heap representation stores the length on the heap, not inline in the struct. This saves memory in the struct itself but *slightly* increases the cost of `len()` since it requires a heap read. In practice, the `len()` cost is only marginally slower than inline storage and is typically negligible compared to memory savings, cache density improvements, and 3x faster operations on inlined strings.
@@ -79,6 +69,12 @@ The heap representation stores the length on the heap, not inline in the struct.
 `ColdString` uses `unsafe` to implement its packed representation and pointer tagging. Usage of `unsafe` is narrowly scoped to where layout control is required, and each instance is documented with `// SAFETY: <invariant>`. To further ensure soundness, `ColdString` is written using [Rust's strict provenance API](https://doc.rust-lang.org/beta/std/ptr/index.html#strict-provenance), handles unaligned access internally, maintains explicit heap alignment guarantees, and is validated with property testing and MIRI.
 
 ## Benchmarks
+
+Overall, `ColdString` can lead to substantial memory savings over both `String` and other short-string crates:
+- **12% – 67%** smaller `Vec<S>`
+- **35% – 67%** smaller `HashSet<S>`
+- **30% – 75%** smaller `BTreeSet<S>` (vs `String`)
+- **13% – 63%** smaller `BTreeSet<S>` (vs other crates)
 
 ### Memory Comparisons (Allocator)
 

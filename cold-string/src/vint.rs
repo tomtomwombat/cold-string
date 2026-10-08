@@ -2,14 +2,15 @@
 
 use crate::encoded::WIDTH;
 
-/// Returns size of vint and first byte.
+/// Returns size of vint and first byte. `value` is written after. The size is used for the allocation.
 #[inline]
-pub fn write_partial(value: usize) -> (usize, u8) {
-    if value < 248 {
-        (1, value as u8)
+pub fn write_partial(value: &mut usize) -> (usize, u8) {
+    if *value < 248 {
+        (1, *value as u8)
     } else {
-        let size = 9 - (value.leading_zeros() >> 3) as usize;
-        (size, 246 + size as u8)
+        *value -= 247;
+        let size = WIDTH + 1 - (value.leading_zeros() >> 3) as usize;
+        (size, (246 + size) as u8)
     }
 }
 
@@ -21,13 +22,13 @@ pub unsafe fn read(ptr: *const u8) -> (usize, usize) {
     if b0 < 248 {
         return (b0 as usize, 1);
     }
-    // 5+/9+ trailing bytes buffer: unconditional 8-byte read is safe.
+    // 6+/10+ trailing bytes buffer: unconditional 8-byte read is safe.
     let raw = usize::from_le_bytes(ptr.add(1).cast::<[u8; WIDTH]>().read_unaligned());
-    let len = (b0 - 247) as usize;
     // remove junk bytes past `len`
-    let shift = ((8 - len) as u32) << 3;
+    let size = (b0 - 247) as usize;
+    let shift = (WIDTH - size) as u32 * 8;
     let val = (raw << shift) >> shift;
-    (val as usize, len + 1)
+    (val + 247, size + 1)
 }
 
 #[cfg(test)]
@@ -39,8 +40,23 @@ mod tests {
         assert_correct(451);
     }
 
-    fn write(value: usize) -> (usize, [u8; WIDTH + 1]) {
-        let (len, first_byte) = write_partial(value);
+    #[test]
+    fn vint_edges() {
+        for size in [0, 247, 248, 502, 503, 65782, 65783, 16_777_462] {
+            assert_correct(size);
+        }
+    
+        for (val, expected) in [(0, 1), (247, 1), (248, 2), (503, 3)] {
+            let (wrote, buf) = write(val);
+            assert_eq!(wrote, expected, "Value {} took {} bytes instead of {}", val, wrote, expected);
+            let (read_val, read_len) = unsafe { read(buf.as_ptr()) };
+            assert_eq!(val, read_val);
+            assert_eq!(expected, read_len);
+        }
+    }
+
+    fn write(mut value: usize) -> (usize, [u8; WIDTH + 1]) {
+        let (len, first_byte) = write_partial(&mut value);
         let mut buf = [0; WIDTH + 1];
         buf[0] = first_byte;
         buf[1..WIDTH + 1].copy_from_slice(&value.to_le_bytes());

@@ -38,15 +38,15 @@ impl<H> VintStringInner<H> {
     #[inline]
     unsafe fn read_len(payload: *const u8) -> (usize, usize) {
         let (stored_len, vint_len) = vint::read(payload);
-        (stored_len + WIDTH, vint_len)
+        (stored_len + WIDTH + 1, vint_len)
     }
 
     #[inline]
     pub(crate) fn allocate(header: H, s: &str) -> NonNull<Self> {
         assert!(s.len() > WIDTH, "heap string must exceed inline capacity");
-        let stored_len = s.len() - WIDTH;
-        let (vint_len, fist_byte) = vint::write_partial(stored_len);
-        let layout = Self::layout(s.len(), vint_len);
+        let mut stored_len = s.len() - WIDTH - 1;
+        let (size, fist_byte) = vint::write_partial(&mut stored_len);
+        let layout = Self::layout(s.len(), size);
 
         unsafe {
             // SAFETY: `layout` has non-zero size because the vint is at least one byte.
@@ -60,7 +60,7 @@ impl<H> VintStringInner<H> {
             let payload = Self::payload(ptr);
             *payload = fist_byte;
             ptr::copy_nonoverlapping(stored_len.to_le_bytes().as_ptr(), payload.add(1), WIDTH);
-            ptr::copy_nonoverlapping(s.as_ptr(), payload.add(vint_len), s.len());
+            ptr::copy_nonoverlapping(s.as_ptr(), payload.add(size), s.len());
             ptr
         }
     }

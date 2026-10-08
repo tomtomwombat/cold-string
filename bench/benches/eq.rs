@@ -4,77 +4,61 @@ use std::hint::black_box;
 use std::str::FromStr;
 
 use bench::*;
-use cold_string::ColdString;
 
 const COUNT: usize = 1000;
-const LENGTHS: &[usize] = &[4, 8, 16, 32, 64];
+const LENGTHS: &[usize] = &[4, 8, 16, 32, 255];
 const RATIOS: &[f64] = &[0.0, 0.5, 1.0];
 
 fn build_pairs<T>(len: usize, eq_ratio: f64) -> (Vec<T>, Vec<T>)
 where
-    T: FromStr,
+    T: FromStr + Clone,
     <T as FromStr>::Err: Debug,
 {
-    let mut left_strings = Vec::with_capacity(COUNT);
-    let mut right_strings = Vec::with_capacity(COUNT);
-
-    for _ in 0..COUNT {
-        left_strings.push(random_string::<String>(len, len));
-    }
-
-    for left in &left_strings {
+    let left: Vec<T> = (0..COUNT).map(|_| random_string::<T>(len, len)).collect();
+    let mut right = Vec::with_capacity(COUNT);
+    for s in left.iter() {
         if fastrand::f64() < eq_ratio {
-            right_strings.push(left.clone());
+            right.push(s.clone());
         } else {
-            right_strings.push(random_string::<String>(len, len));
+            right.push(random_string::<T>(len, len));
         }
     }
-
-    let left = left_strings
-        .into_iter()
-        .map(|s| s.parse().unwrap())
-        .collect();
-    let right = right_strings
-        .into_iter()
-        .map(|s| s.parse().unwrap())
-        .collect();
-
     (left, right)
 }
 
-fn bench_eq_type<T>(c: &mut Criterion, name: &str)
+fn bench_eq<T>(c: &mut Criterion)
 where
-    T: FromStr + PartialEq,
+    T: FromStr + PartialEq + StringType + Clone,
     <T as FromStr>::Err: Debug,
 {
-    let mut group = c.benchmark_group(name);
+    let mut group = c.benchmark_group(format!("{}::eq", T::name()));
 
     for &len in LENGTHS {
         for &ratio in RATIOS {
             let (left, right) = build_pairs::<T>(len, ratio);
-
-            group.bench_with_input(
-                BenchmarkId::new(format!("len={}_eq={}", len, ratio), ""),
-                &(len, ratio),
-                |b, _| {
-                    b.iter(|| {
-                        for (l, r) in left.iter().zip(right.iter()) {
-                            black_box(l == r);
-                        }
-                    })
-                },
-            );
+            let id = BenchmarkId::new(format!("len={},eq={}", len, ratio), "");
+            group.bench_with_input(id, &(len, ratio), |b, _| {
+                b.iter(|| {
+                    for (l, r) in left.iter().zip(right.iter()) {
+                        black_box(l == r);
+                    }
+                })
+            });
         }
     }
 
     group.finish();
 }
 
-fn bench_eq(c: &mut Criterion) {
-    bench_eq_type::<ColdString>(c, "ColdString_eq");
-    bench_eq_type::<compact_string::CompactString>(c, "CompactString_eq");
-    bench_eq_type::<String>(c, "String_eq");
+fn run_bench_eq(c: &mut Criterion) {
+    bench_eq::<String>(c);
+    bench_eq::<cold_string::ColdString>(c);
+    bench_eq::<compact_string::CompactString>(c);
+    bench_eq::<compact_str::CompactString>(c);
+    bench_eq::<smartstring::alias::String>(c);
+    bench_eq::<smallstr::SmallString<[u8; 8]>>(c);
+    bench_eq::<smol_str::SmolStr>(c);
 }
 
-criterion_group!(benches, bench_eq);
+criterion_group!(benches, run_bench_eq);
 criterion_main!(benches);

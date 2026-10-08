@@ -259,7 +259,17 @@ impl Clone for ColdString {
 
 impl PartialEq for ColdString {
     fn eq(&self, other: &Self) -> bool {
-        self.encoded.addr() == other.encoded.addr() || self.as_bytes() == other.as_bytes()
+        if self.is_inline() && other.is_inline() {
+            self.encoded.addr() == other.encoded.addr()
+        } else if !self.is_inline() && !other.is_inline() {
+            if self.encoded.heap_prefix() != other.encoded.heap_prefix() {
+                false
+            } else {
+                self.as_bytes() == other.as_bytes()
+            }
+        } else {
+            false
+        }
     }
 }
 
@@ -613,6 +623,8 @@ mod tests {
         assert_eq!(s, cs);
         assert_eq!(cs, *s);
         assert_eq!(*s, cs);
+        assert_eq!(cs, cs.clone());
+        assert!(cs != T::new("unused-qwerty"));
         let opt_s = Some(cs.clone());
         assert_eq!(opt_s, Some(T::new(s)));
         assert!(opt_s.is_some());

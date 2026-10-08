@@ -15,6 +15,52 @@ impl FromStr for StdArcStr {
     }
 }
 
+pub trait StringType {
+    fn name() -> &'static str;
+}
+
+impl StringType for String {
+    fn name() -> &'static str {
+        "String"
+    }
+}
+
+impl StringType for cold_string::ColdString {
+    fn name() -> &'static str {
+        "cold_string::ColdString"
+    }
+}
+
+impl StringType for compact_string::CompactString {
+    fn name() -> &'static str {
+        "compact_string::CompactString"
+    }
+}
+
+impl StringType for compact_str::CompactString {
+    fn name() -> &'static str {
+        "compact_str::CompactString"
+    }
+}
+
+impl StringType for smartstring::alias::String {
+    fn name() -> &'static str {
+        "smartstring::alias::String"
+    }
+}
+
+impl StringType for smallstr::SmallString<[u8; 8]> {
+    fn name() -> &'static str {
+        "smallstr::SmallString<[u8; 8]>"
+    }
+}
+
+impl StringType for smol_str::SmolStr {
+    fn name() -> &'static str {
+        "smol_str::SmolStr"
+    }
+}
+
 pub fn random_string<T: FromStr>(min: usize, max: usize) -> T {
     let len = fastrand::usize(min..=max);
     let mut scratch = [0u8; 255];

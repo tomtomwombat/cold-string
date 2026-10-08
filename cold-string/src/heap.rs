@@ -45,7 +45,7 @@ impl<H> VintStringInner<H> {
     pub(crate) fn allocate(header: H, s: &str) -> NonNull<Self> {
         assert!(s.len() > WIDTH, "heap string must exceed inline capacity");
         let mut stored_len = s.len() - WIDTH - 1;
-        let (size, fist_byte) = vint::write_partial(&mut stored_len);
+        let (size, first_byte) = vint::write_partial(&mut stored_len);
         let layout = Self::layout(s.len(), size);
 
         unsafe {
@@ -58,7 +58,7 @@ impl<H> VintStringInner<H> {
 
             ptr::addr_of_mut!((*raw).header).write(header);
             let payload = Self::payload(ptr);
-            *payload = fist_byte;
+            *payload = first_byte;
             ptr::copy_nonoverlapping(stored_len.to_le_bytes().as_ptr(), payload.add(1), WIDTH);
             ptr::copy_nonoverlapping(s.as_ptr(), payload.add(size), s.len());
             ptr

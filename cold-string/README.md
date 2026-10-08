@@ -45,7 +45,7 @@ assert_eq!(first, second);
 ## How It Works
 
 ColdString is an 8-byte tagged `NonNull` pointer (4 bytes on 32-bit machines) that has one of 3 representations:
-- the first byte is `10xxxxxx`: The pointer encodes a heap address pointing to the length followed by the UTF-8 bytes. Rotating the `10` to the least significant position and setting to `00` decodes to the address (the heap allocation uses [4-byte alignment](https://doc.rust-lang.org/beta/std/alloc/struct.Layout.html#method.from_size_align)). The length of string is encoded with a variable length int that requires 1 bytes for 9–135 length, 2 bytes for lengths 136–16,391, etc.
+- the first byte is `10xxxxxx`: The pointer encodes a heap address pointing to the length followed by the UTF-8 bytes. Rotating the `10` to the least significant position and setting to `00` decodes to the address (the heap allocation uses [4-byte alignment](https://doc.rust-lang.org/beta/std/alloc/struct.Layout.html#method.from_size_align)). The length of string is encoded with a variable length int that requires 1 bytes for 9–256 length, 2 bytes for lengths 257–511, 3 bytes for 512–65,791, etc.
 - otherwise, the string is inlined: the pointer represent 0-8 UTF-8 bytes, starting from the first byte. Trailing bytes are `0xFF`, and the length is calculated from `trailing_ones`.
 - the one exception to the rule above is if the whole pointer is exactly `(usize::MAX >> 4) << 2`, in which the string represents `"\0\0\0\0\0\0\0\0"` (an invalid value for `NonNull`). This number is chosen because
   - the first 2 bits are 0, classifying it as inlined,

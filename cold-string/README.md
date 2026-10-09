@@ -8,7 +8,7 @@ A 1-word (8-byte) sized representation of immutable UTF-8 strings that in-lines 
 - Strings ≤ 8 bytes require no allocation
 - Compact variable-sized length encoding
 - Up to 67% smaller than other short-string optimizations (see [Memory Comparisons](#memory-comparison-system-rss))
-- Atomic reference counting support
+- Optional atomic reference counting support (`arc` feature)
 - Niche optimized: `Option<ColdString>` is the same size as `ColdString`
 - `no_std` compatible, MSRV 1.60
 - Uses strict provenance API. Miri, loom, and property tested (see [Safety](#safety))
@@ -30,14 +30,17 @@ assert_eq!(size_of::<ColdString>(), size_of::<usize>());
 assert_eq!(size_of::<Option<ColdString>>(), size_of::<ColdString>());
 ```
 
-Use `ArcColdString` when clones should share long-string storage:
+Enable the `arc` feature to use `ArcColdString` when clones should share long-string storage:
 
 ```rust
+# #[cfg(feature = "arc")]
+# {
 use cold_string::ArcColdString;
 
 let first = ArcColdString::new("a string longer than one machine word");
 let second = first.clone();
 assert_eq!(first, second);
+# }
 ```
 
 `ArcColdString` uses a native-width reference count. `ArcColdString8`, `ArcColdString16`, and `ArcColdString32` use 1-, 2-, and 4-byte counts when a smaller heap header is preferable. All variants remain one word in size and inline up to 8 bytes.

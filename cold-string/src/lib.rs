@@ -252,32 +252,43 @@ impl Clone for ColdString {
                 encoded: self.encoded,
             }
         } else {
-            Self::new(self.as_str())
+            unsafe { Self::from_utf8_unchecked(self.as_bytes()) }
         }
     }
 }
 
 impl PartialEq for ColdString {
     fn eq(&self, other: &Self) -> bool {
-        if self.is_inline() && other.is_inline() {
-            self.encoded.addr() == other.encoded.addr()
-        } else if !self.is_inline() && !other.is_inline() {
-            if self.encoded.heap_prefix() != other.encoded.heap_prefix() {
-                false
-            } else {
-                self.as_bytes() == other.as_bytes()
-            }
-        } else {
-            false
+        let left_addr = self.encoded.addr();
+        let right_addr = other.encoded.addr();
+        if left_addr == right_addr {
+            return true;
         }
+        if self.is_inline() || other.is_inline() {
+            return false;
+        }
+        self.encoded.heap_eq(&other.encoded)
     }
 }
 
 impl Eq for ColdString {}
 
+impl Ord for ColdString {
+    #[inline]
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.as_bytes().cmp(other.as_bytes())
+    }
+}
+
+impl PartialOrd for ColdString {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 impl Hash for ColdString {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_str().hash(state)
+        self.as_bytes().hash(state)
     }
 }
 
@@ -389,18 +400,6 @@ impl AsRef<[u8]> for ColdString {
     #[inline]
     fn as_ref(&self) -> &[u8] {
         self.as_bytes()
-    }
-}
-
-impl Ord for ColdString {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.as_str().cmp(other.as_str())
-    }
-}
-
-impl PartialOrd for ColdString {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
     }
 }
 

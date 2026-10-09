@@ -2,12 +2,12 @@ use bench::*;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::hint::black_box;
 
-const LENGTHS: &[usize] = &[4, 8, 16, 255];
+const LENGTHS: &[usize] = &[4, 8, 16, 300];
 
 macro_rules! bench_len_type {
     ($c:expr, $t:ty) => {{
         let mut group = $c.benchmark_group(format!("{}::len", <$t>::name()));
-        for &len in LENGTHS {
+        for &len in LENGTHS.into_iter().filter(|x| **x <= <$t>::max_len()) {
             let s: $t = random_string::<String>(len, len).parse().unwrap();
             let id = BenchmarkId::new(format!("len={}", len), "");
             group.bench_with_input(id, &len, |b, _| b.iter(|| black_box(s.len())));

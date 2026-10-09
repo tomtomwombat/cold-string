@@ -51,16 +51,5 @@ fn bench_hash(c: &mut Criterion) {
     group.finish();
 }
 
-fn bench_clone(c: &mut Criterion) {
-    let cold = ColdString::from(LONG);
-    let string = String::from(LONG);
-
-    let mut group = c.benchmark_group("clone");
-    group.bench_function("ColdString clone", |b| b.iter(|| black_box(cold.clone())));
-    group.bench_function("String clone", |b| b.iter(|| black_box(string.clone())));
-
-    group.finish();
-}
-
-criterion_group!(benches, bench_hash, bench_clone);
+criterion_group!(benches, bench_hash);
 criterion_main!(benches);

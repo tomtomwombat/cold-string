@@ -30,6 +30,18 @@ assert_eq!(size_of::<ColdString>(), size_of::<usize>());
 assert_eq!(size_of::<Option<ColdString>>(), size_of::<ColdString>());
 ```
 
+Use `RcColdString` when clones should share long-string storage on a single thread:
+
+```rust
+use cold_string::RcColdString;
+
+let first = RcColdString::new("a string longer than one machine word");
+let second = first.clone();
+assert_eq!(first, second);
+```
+
+`RcColdString8`, `RcColdString16`, and `RcColdString32` use smaller reference counts. If a count saturates, its allocation becomes immortal rather than allowing the count to wrap.
+
 Enable the `arc` feature to use `ArcColdString` when clones should share long-string storage:
 
 ```rust

@@ -28,7 +28,6 @@ sptr = { version = "0.3.2", default-features = false }
 rustversion = "1.0.22"
 
 [dev-dependencies]
-hashbrown = "0.12.3"
 serde_test = "1.0.177"
 proptest = {version = "=1.8.0", default-features = false, features = ["std", "bit-set"] }
 

@@ -557,8 +557,7 @@ mod serde_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core::hash::BuildHasher;
-    use hashbrown::hash_map::DefaultHashBuilder;
+    use std::collections::hash_map::DefaultHasher;
 
     fn assert_layout<T: TestString>() {
         assert_eq!(mem::size_of::<T>(), mem::size_of::<usize>());
@@ -613,10 +612,9 @@ mod tests {
         assert_eq!(cs.as_bytes(), s.as_bytes());
         assert_eq!(cs.as_str().as_bytes(), s.as_bytes());
         assert_eq!(cs.clone(), cs);
-        let bh = DefaultHashBuilder::new();
-        let mut hasher1 = bh.build_hasher();
+        let mut hasher1 = DefaultHasher::new();
         cs.hash(&mut hasher1);
-        let mut hasher2 = bh.build_hasher();
+        let mut hasher2 = DefaultHasher::new();
         cs.clone().hash(&mut hasher2);
         assert_eq!(hasher1.finish(), hasher2.finish());
         assert_eq!(cs, s);

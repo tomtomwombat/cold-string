@@ -48,6 +48,7 @@ proptest! {
         assert_eq!(opt_s.as_ref().map(|x| x.as_str()), Some(s.as_str()));
     }
 
+    #[cfg(feature = "arc")]
     #[test]
     fn arb_arc_string(s in any::<String>()) {
         let cold = ArcColdString::new(s.as_str());

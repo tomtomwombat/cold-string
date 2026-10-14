@@ -76,6 +76,8 @@ Overall, `ColdString` can lead to substantial memory savings over both `String` 
 - **30% – 75%** smaller `BTreeSet<S>` (vs `String`)
 - **13% – 63%** smaller `BTreeSet<S>` (vs other crates)
 
+Benchmarks were measured using an AMD Ryzen 9 5900X 12-Core Processor (3.70 GHz).
+
 ### Memory Comparisons (Allocator)
 
 Memory usage per string, measured by tracking the memory requested by the allocator:
@@ -209,40 +211,42 @@ Fresh allocation and string copy:
 
 Type             | 16 bytes | 128 bytes | 512 bytes
 :---             |     ---: |      ---: |      ---:
-`Arc<str>`       |     28.03 |      29.57 |      36.98
-`arcstr::ArcStr` |     27.19 |      28.70 |      38.46
-`ArcColdString`  |     30.12 |      32.61 |      43.70
+`Arc<str>`       |     26.50 |      29.01 |      38.73
+`arcstr::ArcStr` |     28.23 |      30.42 |      41.24
+`ArcColdString`  |     24.99 |      26.13 |      42.32
 
 Clone/reference-count increment:
 
 Type             | 16 bytes | 128 bytes | 512 bytes
 :---             |     ---: |      ---: |      ---:
-`Arc<str>`       |      3.86 |       3.82 |       3.82
-`arcstr::ArcStr` |      3.39 |       3.41 |       3.43
-`ArcColdString`  |      3.44 |       3.45 |       3.43
+`Arc<str>`       |      3.64 |       3.81 |       3.69
+`arcstr::ArcStr` |      3.00 |       2.98 |       3.03
+`ArcColdString`  |      3.81 |       3.89 |       3.83
 
 String access:
 
 Type             | 16 bytes | 128 bytes | 512 bytes
 :---             |     ---: |      ---: |      ---:
-`Arc<str>`       |      1.02 |       1.03 |       1.04
-`arcstr::ArcStr` |      1.02 |       1.02 |       1.02
-`ArcColdString`  |      1.38 |       1.68 |       1.70
+`Arc<str>`       |      0.99 |       0.98 |       0.97
+`arcstr::ArcStr` |      0.99 |       1.01 |       1.01
+`ArcColdString`  |      1.11 |       1.11 |       1.58
 
 Non-final drop/reference-count decrement:
 
 Type             | 16 bytes | 128 bytes | 512 bytes
 :---             |     ---: |      ---: |      ---:
-`Arc<str>`       |      2.43 |       2.49 |       2.43
-`arcstr::ArcStr` |      2.52 |       2.53 |       2.52
-`ArcColdString`  |      2.17 |       2.18 |       2.19
+`Arc<str>`       |      2.33 |       2.38 |       2.38
+`arcstr::ArcStr` |      2.38 |       2.38 |       2.34
+`ArcColdString`  |      1.97 |       2.01 |       1.96
 
 Clone and drop contention across 4 threads sharing strings in a fixed size pool:
-Type                          |  Light (1024)  |  Medium (16)   |   Heavy (1)   
-:---                          |     :---:      |     :---:      |     :---:     
-`Arc<str>`                    |          26.55 |          54.69 |         144.81
-`arcstr::ArcStr`              |          29.29 |         119.39 |         214.31
-`cold_string::ArcColdString32`|           25.69 |          90.53 |         262.83
+
+| Type                           | pool=1 | pool=16 | pool=1024 |
+| ------------------------------ | ------ | ------- | --------- |
+| `arc_str`                      | 103.81 | 56.92   | 38.75     |
+| `arcstr::arcstr`               | 112.92 | 185.44  | 169.16    |
+| `cold_string::arccoldstring`   | 123.88 | 130.27  | 62.87     |
+| `cold_string::arccoldstring32` | 124.13 | 142.71  | 66.16     |
 
 ## License
 

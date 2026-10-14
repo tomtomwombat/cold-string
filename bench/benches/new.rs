@@ -4,12 +4,12 @@ use std::{hint::black_box, str::FromStr};
 use bench::*;
 
 const COUNT: usize = 1000;
-const LENGTHS: &[usize] = &[4, 8, 16, 32, 255];
+const LENGTHS: &[usize] = &[4, 8, 16, 32, 300];
 
 fn bench_new<T: FromStr + StringType>(c: &mut Criterion) {
     let mut group = c.benchmark_group(format!("{}::new", T::name()));
 
-    for &len in LENGTHS {
+    for &len in LENGTHS.into_iter().filter(|x| **x <= T::max_len()) {
         for min in [0, len] {
             let strings: Vec<String> = (0..COUNT).map(|_| random_string(min, len)).collect();
             let id = BenchmarkId::new(format!("len={}..={}", min, len), "");

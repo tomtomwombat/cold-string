@@ -73,12 +73,6 @@ impl<H> VintStringInner<H> {
         slice::from_raw_parts(payload.add(vint_len), len)
     }
 
-    #[inline]
-    pub(crate) unsafe fn prefix<'a>(ptr: NonNull<Self>) -> &'a [u8] {
-        // SAFETY: `WIDTH` bytes are guaranteed to be on the heap
-        slice::from_raw_parts(Self::payload(ptr), WIDTH)
-    }
-
     /// The caller must have exclusive ownership of this allocation.
     #[inline]
     pub(crate) unsafe fn deallocate(ptr: NonNull<Self>) {
@@ -88,5 +82,33 @@ impl<H> VintStringInner<H> {
 
         ptr::drop_in_place(ptr::addr_of_mut!((*ptr.as_ptr()).header));
         dealloc(ptr.as_ptr().cast(), layout);
+    }
+
+    #[inline]
+    pub(crate) unsafe fn payload_eq(l: NonNull<Self>, r: NonNull<Self>) -> bool {
+        let p1 = Self::payload(l);
+        let p2 = Self::payload(r);
+
+        // Compare first `WIDTH` quickly
+        let v1 = ptr::read_unaligned(p1 as *const usize);
+        let v2 = ptr::read_unaligned(p2 as *const usize);
+        if v1 != v2 {
+            return false;
+        }
+
+        // Compare last byte of longest vint size, after this we only need to do 1 vint read
+        let v1_byte = *p1.add(WIDTH);
+        let v2_byte = *p2.add(WIDTH);
+        if v1_byte != v2_byte {
+            return false;
+        }
+
+        // Compare remaining, lengths must be equal here
+        let (len, vint_len) = Self::read_len(p1);
+        let slice_len = len + vint_len - WIDTH - 1;
+        let s1 = slice::from_raw_parts(p1.add(WIDTH + 1), slice_len);
+        let s2 = slice::from_raw_parts(p2.add(WIDTH + 1), slice_len);
+
+        s1 == s2
     }
 }

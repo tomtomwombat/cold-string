@@ -164,12 +164,12 @@ impl<H> Encoded<H> {
         slice::from_raw_parts(bytes, len)
     }
 
-    /// Returns the un-parsed first `WIDTH` bytes of heap.
     #[inline]
-    pub(crate) fn heap_prefix(&self) -> &[u8] {
+    pub(crate) fn heap_eq(&self, other: &Self) -> bool {
         debug_assert!(!self.is_inline());
-        // SAFETY: `WIDTH` bytes are guaranteed to be on the heap
-        unsafe { VintStringInner::prefix(self.heap_ptr()) }
+        debug_assert!(!other.is_inline());
+        // SAFETY: both are inline, and `WIDTH` bytes are guaranteed to be on the heap
+        unsafe { VintStringInner::payload_eq(self.heap_ptr(), other.heap_ptr()) }
     }
 
     #[inline]

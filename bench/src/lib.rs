@@ -15,8 +15,17 @@ impl FromStr for StdArcStr {
     }
 }
 
-pub trait StringType {
+impl AsRef<str> for StdArcStr {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+pub trait StringType: FromStr {
     fn name() -> &'static str;
+    fn max_len() -> usize {
+        usize::MAX
+    }
 }
 
 impl StringType for String {
@@ -34,6 +43,9 @@ impl StringType for cold_string::ColdString {
 impl StringType for compact_string::CompactString {
     fn name() -> &'static str {
         "compact_string::CompactString"
+    }
+    fn max_len() -> usize {
+        u8::MAX as usize
     }
 }
 
@@ -61,11 +73,36 @@ impl StringType for smol_str::SmolStr {
     }
 }
 
+impl StringType for cold_string::ArcColdString {
+    fn name() -> &'static str {
+        "cold_string::ArcColdString"
+    }
+}
+
+impl StringType for cold_string::ArcColdString32 {
+    fn name() -> &'static str {
+        "cold_string::ArcColdString32"
+    }
+}
+
+impl StringType for StdArcStr {
+    fn name() -> &'static str {
+        "Arc<str>"
+    }
+}
+
+impl StringType for arcstr::ArcStr {
+    fn name() -> &'static str {
+        "arcstr::ArcStr"
+    }
+}
+
 pub fn random_string<T: FromStr>(min: usize, max: usize) -> T {
-    let len = fastrand::usize(min..=max);
-    let mut scratch = [0u8; 255];
+    let mut rng = fastrand::Rng::with_seed(42);
+    let len = rng.usize(min..=max);
+    let mut scratch = [0u8; 300];
     for byte in scratch.iter_mut().take(len) {
-        *byte = fastrand::alphanumeric() as u8;
+        *byte = rng.alphanumeric() as u8;
     }
     let s = unsafe { std::str::from_utf8_unchecked(&scratch[..len]) };
     s.parse().map_err(|_| ()).unwrap()

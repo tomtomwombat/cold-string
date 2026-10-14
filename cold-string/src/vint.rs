@@ -41,14 +41,26 @@ mod tests {
     }
 
     #[test]
+    fn vint_max_size() {
+        let mut x = usize::MAX;
+        let (len, _first) = write_partial(&mut x);
+        // changing this breaks assumptions in `payload_eq` and docs in README
+        assert_eq!(len, WIDTH + 1);
+    }
+
+    #[test]
     fn vint_edges() {
         for size in [0, 247, 248, 502, 503, 65782, 65783, 16_777_462] {
             assert_correct(size);
         }
-    
+
         for (val, expected) in [(0, 1), (247, 1), (248, 2), (503, 3)] {
             let (wrote, buf) = write(val);
-            assert_eq!(wrote, expected, "Value {} took {} bytes instead of {}", val, wrote, expected);
+            assert_eq!(
+                wrote, expected,
+                "Value {} took {} bytes instead of {}",
+                val, wrote, expected
+            );
             let (read_val, read_len) = unsafe { read(buf.as_ptr()) };
             assert_eq!(val, read_val);
             assert_eq!(expected, read_len);

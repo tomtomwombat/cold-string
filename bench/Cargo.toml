@@ -8,7 +8,7 @@ edition = "2021"
 fastrand = "2.3.0"
 
 arcstr = { version = "1.2.0", default-features = false }
-cold-string = { path = "../cold-string" }
+cold-string = { path = "../cold-string", features = ["arc"] }
 compact_string = "0.1.0"
 smol_str = "0.3.5"
 compact_str = "0.9.0"

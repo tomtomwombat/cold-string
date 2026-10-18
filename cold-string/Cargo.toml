@@ -17,13 +17,14 @@ maintenance = { status = "actively-developed" }
 
 [features]
 default = []
+arc = ["dep:portable-atomic"]
 serde = ["dep:serde", "serde/alloc"]
 rkyv = ["dep:rkyv", "rkyv/alloc", "rkyv/bytecheck"]
 
 [dependencies]
 serde = { version = "1.0.228", optional = true, default-features = false }
 rkyv = { version = "0.8.15", optional = true, default-features = false }
-portable-atomic = { version = "1.15.0", default-features = false, features = ["require-cas"] }
+portable-atomic = { version = "1.15.0", optional = true, default-features = false, features = ["require-cas"] }
 sptr = { version = "0.3.2", default-features = false }
 rustversion = "1.0.22"
 

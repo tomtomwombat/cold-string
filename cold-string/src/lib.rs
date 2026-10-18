@@ -28,16 +28,27 @@ use core::{
 #[cfg(test)]
 use core::{mem, ptr};
 
+#[cfg(feature = "arc")]
 mod arc;
 mod encoded;
 mod heap;
+mod rc;
+mod shared;
 mod vint;
 
+#[cfg(feature = "arc")]
 pub use crate::arc::ArcColdString;
+#[cfg(feature = "arc")]
 pub use crate::arc::ArcColdString16;
+#[cfg(feature = "arc")]
 pub use crate::arc::ArcColdString32;
+#[cfg(feature = "arc")]
 pub use crate::arc::ArcColdString8;
 use crate::encoded::Encoded;
+pub use crate::rc::RcColdString;
+pub use crate::rc::RcColdString16;
+pub use crate::rc::RcColdString32;
+pub use crate::rc::RcColdString8;
 
 #[cfg(feature = "rkyv")]
 mod rkyv;
@@ -480,7 +491,7 @@ impl TestString for ColdString {
 }
 
 #[cfg(test)]
-impl<A: arc::RefCount> TestString for arc::ArcColdStringInner<A> {
+impl<C: shared::RefCount> TestString for shared::RefCounted<C> {
     fn new(s: &str) -> Self {
         Self::new(s)
     }
@@ -522,10 +533,13 @@ impl<A: arc::RefCount> TestString for arc::ArcColdStringInner<A> {
 macro_rules! each_string {
     ($test:ident $(, $arg:expr)*) => {
         $test::<ColdString>($($arg),*);
-        $test::<ArcColdString>($($arg),*);
-        $test::<ArcColdString8>($($arg),*);
-        $test::<ArcColdString16>($($arg),*);
-        $test::<ArcColdString32>($($arg),*);
+        #[cfg(feature = "arc")]
+        {
+            $test::<ArcColdString>($($arg),*);
+            $test::<ArcColdString8>($($arg),*);
+            $test::<ArcColdString16>($($arg),*);
+            $test::<ArcColdString32>($($arg),*);
+        }
     };
 }
 
